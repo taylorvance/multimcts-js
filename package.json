@@ -1,0 +1,25 @@
+{
+  "name": "multimcts",
+  "version": "1.0.0",
+  "description": "Monte Carlo Tree Search for multiple teams",
+  "main": "src/mcts.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taylorvance/multimcts-js.git"
+  },
+  "keywords": [
+    "MCTS",
+    "Monte Carlo Tree Search",
+    "AI",
+	"Game"
+  ],
+  "author": "Taylor Vance",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/taylorvance/multimcts-js/issues"
+  },
+  "homepage": "https://github.com/taylorvance/multimcts-js#readme"
+}
