@@ -1,4 +1,4 @@
-const { GameState } = require('./mcts');
+const { GameState } = require('../src/mcts');
 
 class TicTacToeState extends GameState {
     constructor(board=null, team=true) {
