@@ -212,4 +212,4 @@ class Node {
 	}
 }
 
-module.exports = {MCTS, GameState};
+module.exports = {MCTS, GameState, Node};
