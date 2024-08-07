@@ -1,6 +1,6 @@
 {
 	"name": "multimcts",
-	"version": "1.2.2",
+	"version": "1.2.3",
 	"description": "Monte Carlo Tree Search for multiple teams",
 	"main": "src/mcts.js",
 	"types": "multimcts.d.ts",

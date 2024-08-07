@@ -11,6 +11,8 @@ declare module 'multimcts' {
   }
 
   export class MCTS {
+    explorationBias: number;
+    rootNode: Node | null;
     constructor(explorationBias?: number);
     search(state: GameState, maxIterations?: number, maxTime?: number): string;
     executeRound(node: Node): void;
@@ -21,6 +23,15 @@ declare module 'multimcts' {
   }
 
   export class Node {
+    state: GameState;
+    parent: Node | null;
+    move: string | null;
+    children: { [move: string]: Node };
+    visits: number;
+	rewards: { [team: string]: number };
+	isFullyExpanded: boolean;
+	remainingMoves: string[];
+	team: string;
     constructor(state: GameState, parent?: Node | null, move?: string | null);
     visit(rewards: { [team: string]: number }): void;
     findBestChild(explorationBias: number): Node;
