@@ -1,8 +1,9 @@
 {
 	"name": "multimcts",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "Monte Carlo Tree Search for multiple teams",
 	"main": "src/mcts.js",
+	"types": "multimcts.d.ts",
 	"exports": {
 		".": "./src/mcts.js",
 		"./tictactoe": "./examples/tictactoe.js"
