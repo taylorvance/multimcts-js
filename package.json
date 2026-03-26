@@ -24,10 +24,12 @@
 		"README.md"
 	],
 	"scripts": {
+		"arena": "npm run build && node --experimental-strip-types scripts/arena.mjs",
 		"build": "rm -rf dist && tsc -p tsconfig.json",
 		"changeset": "changeset",
 		"clean": "rm -rf dist node_modules coverage .eslintcache *.tsbuildinfo",
 		"prepack": "npm run build",
+		"profile:search": "npm run build && node --experimental-strip-types scripts/profile-search.mjs",
 		"release": "npm run verify && changeset publish",
 		"test": "npm run typecheck && node --experimental-strip-types --test tests/index.test.ts",
 		"test:dist": "npm run build && node scripts/smoke-test-dist.mjs",

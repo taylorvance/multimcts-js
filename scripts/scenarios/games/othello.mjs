@@ -1,0 +1,211 @@
+import { GameState } from '../../../dist/index.js';
+
+const ROWS = 8;
+const COLS = 8;
+const TOTAL_CELLS = ROWS * COLS;
+const DIRECTIONS = [
+  [-1, -1],
+  [-1, 0],
+  [-1, 1],
+  [0, -1],
+  [0, 1],
+  [1, -1],
+  [1, 0],
+  [1, 1],
+];
+
+export class OthelloState extends GameState {
+  constructor(
+    board = OthelloState.initializeBoard(),
+    team = true,
+    lastMove = null,
+  ) {
+    super();
+    this.board = [...board];
+    this.team = team;
+    this.lastMove = lastMove;
+  }
+
+  static initializeBoard() {
+    const board = Array(TOTAL_CELLS).fill(null);
+    board[(3 * COLS) + 3] = false;
+    board[(3 * COLS) + 4] = true;
+    board[(4 * COLS) + 3] = true;
+    board[(4 * COLS) + 4] = false;
+    return board;
+  }
+
+  getCurrentTeam() {
+    return this.team ? 'B' : 'W';
+  }
+
+  getLegalMoves() {
+    if(this.isTerminal()) {
+      return [];
+    }
+
+    const moves = [];
+
+    for(let index = 0; index < TOTAL_CELLS; index += 1) {
+      if(this.getFlips(index, this.team).length > 0) {
+        moves.push(String(index));
+      }
+    }
+
+    if(moves.length > 0) {
+      return moves;
+    }
+
+    return ['pass'];
+  }
+
+  makeMove(move) {
+    if(move === 'pass') {
+      if(this.isTerminal()) {
+        throw new Error('Illegal Othello pass.');
+      }
+
+      const legalMoves = this.getLegalMoves();
+      if(legalMoves.length > 0 && legalMoves[0] !== 'pass') {
+        throw new Error('Illegal Othello pass.');
+      }
+
+      return new OthelloState(this.board, !this.team, null);
+    }
+
+    const index = Number.parseInt(move, 10);
+    if(!Number.isInteger(index)) {
+      throw new Error(`Invalid Othello move: ${move}`);
+    }
+
+    const flips = this.getFlips(index, this.team);
+    if(flips.length === 0) {
+      throw new Error(`Illegal Othello move: ${move}`);
+    }
+
+    const nextBoard = [...this.board];
+    nextBoard[index] = this.team;
+
+    for(const flipIndex of flips) {
+      nextBoard[flipIndex] = this.team;
+    }
+
+    return new OthelloState(nextBoard, !this.team, index);
+  }
+
+  isTerminal() {
+    if(this.board.every((cell) => cell !== null)) {
+      return true;
+    }
+
+    return this.getLegalMovesForTeam(true).length === 0
+      && this.getLegalMovesForTeam(false).length === 0;
+  }
+
+  getReward() {
+    const { black, white } = this.getScore();
+
+    if(black === white) {
+      return { B: 0.5, W: 0.5 };
+    }
+
+    return black > white
+      ? { B: 1, W: 0 }
+      : { B: 0, W: 1 };
+  }
+
+  toString() {
+    const rows = [];
+
+    for(let row = 0; row < ROWS; row += 1) {
+      let rowString = '';
+
+      for(let col = 0; col < COLS; col += 1) {
+        const cell = this.board[this.getIndex(row, col)];
+        rowString += cell === null ? '.' : (cell ? 'B' : 'W');
+      }
+
+      rows.push(rowString);
+    }
+
+    return `${this.getCurrentTeam()}: ${rows.join('/')}`;
+  }
+
+  getScore() {
+    let black = 0;
+    let white = 0;
+
+    for(const cell of this.board) {
+      if(cell === true) {
+        black += 1;
+      } else if(cell === false) {
+        white += 1;
+      }
+    }
+
+    return { black, white };
+  }
+
+  getLegalMovesForTeam(team) {
+    const moves = [];
+
+    for(let index = 0; index < TOTAL_CELLS; index += 1) {
+      if(this.getFlips(index, team).length > 0) {
+        moves.push(index);
+      }
+    }
+
+    return moves;
+  }
+
+  getFlips(index, team) {
+    if(index < 0 || index >= TOTAL_CELLS || this.board[index] !== null) {
+      return [];
+    }
+
+    const row = Math.floor(index / COLS);
+    const col = index % COLS;
+    const opponent = !team;
+    const flips = [];
+
+    for(const [rowDelta, colDelta] of DIRECTIONS) {
+      const line = [];
+      let nextRow = row + rowDelta;
+      let nextCol = col + colDelta;
+
+      while(nextRow >= 0 && nextRow < ROWS && nextCol >= 0 && nextCol < COLS) {
+        const nextIndex = this.getIndex(nextRow, nextCol);
+        const cell = this.board[nextIndex];
+
+        if(cell === opponent) {
+          line.push(nextIndex);
+          nextRow += rowDelta;
+          nextCol += colDelta;
+          continue;
+        }
+
+        if(cell === team && line.length > 0) {
+          flips.push(...line);
+        }
+
+        break;
+      }
+    }
+
+    return flips;
+  }
+
+  getIndex(row, col) {
+    return (row * COLS) + col;
+  }
+}
+
+export const playOthelloMoves = (moves) => {
+  let state = new OthelloState();
+
+  for(const move of moves) {
+    state = state.makeMove(String(move));
+  }
+
+  return state;
+};

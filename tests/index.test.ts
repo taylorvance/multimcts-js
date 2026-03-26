@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GameState, MCTS } from '../src/index.ts';
+import { GameState, MCTS, SearchNode } from '../src/index.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 
 const createSeededRandom = (seed: number) => {
@@ -44,6 +44,87 @@ class ThreeTeamState extends GameState<string, 'A' | 'B' | 'C', ThreeTeamState> 
 
   override toString() {
     return `${this.team}:${this.step}`;
+  }
+}
+
+class ChoiceState extends GameState<'safe' | 'swing', 'P', ChoiceState> {
+  readonly id: 'root' | 'safe' | 'swing';
+
+  constructor(id: 'root' | 'safe' | 'swing' = 'root') {
+    super();
+    this.id = id;
+  }
+
+  getCurrentTeam() {
+    return 'P' as const;
+  }
+
+  getLegalMoves() {
+    return this.id === 'root' ? ['safe', 'swing'] as const : [];
+  }
+
+  makeMove(move: 'safe' | 'swing') {
+    return new ChoiceState(move);
+  }
+
+  isTerminal() {
+    return this.id !== 'root';
+  }
+
+  getReward() {
+    return 0;
+  }
+}
+
+class RolloutSamplingState extends GameState<string, 'R', RolloutSamplingState> {
+  readonly step: number;
+  readonly legalMoveCalls: [number];
+  readonly rolloutSelectionCalls: [number];
+
+  constructor(
+    step = 0,
+    legalMoveCalls: [number] = [0],
+    rolloutSelectionCalls: [number] = [0],
+  ) {
+    super();
+    this.step = step;
+    this.legalMoveCalls = legalMoveCalls;
+    this.rolloutSelectionCalls = rolloutSelectionCalls;
+  }
+
+  getCurrentTeam() {
+    return 'R' as const;
+  }
+
+  getLegalMoves() {
+    this.legalMoveCalls[0] += 1;
+
+    if(this.step <= 1) {
+      return ['advance'];
+    }
+
+    throw new Error('getLegalMoves() should not be used beyond node expansion in this test.');
+  }
+
+  makeMove(_move: string) {
+    return new RolloutSamplingState(this.step + 1, this.legalMoveCalls, this.rolloutSelectionCalls);
+  }
+
+  isTerminal() {
+    return this.step >= 2;
+  }
+
+  getReward() {
+    return 1;
+  }
+
+  override selectRolloutMove() {
+    if(this.step !== 1) {
+      return null;
+    }
+
+    this.rolloutSelectionCalls[0] += 1;
+    return 'finish';
   }
 }
 
@@ -137,4 +218,61 @@ test('dict rewards propagate through multi-team searches', () => {
     [...result.bestChild?.rewards.entries() ?? []],
     [['A', 1], ['B', 0.25], ['C', -0.25]],
   );
+});
+
+test('robustChild is the default final action strategy', () => {
+  const mcts = new MCTS<ChoiceState, 'safe' | 'swing', 'P'>({
+    finalActionStrategy: 'robustChild',
+  });
+  const root = new SearchNode(new ChoiceState(), createSeededRandom(5));
+  const safeChild = new SearchNode(new ChoiceState('safe'), createSeededRandom(5), root, 'safe');
+  const swingChild = new SearchNode(new ChoiceState('swing'), createSeededRandom(5), root, 'swing');
+
+  root.children.set('safe', safeChild);
+  root.children.set('swing', swingChild);
+  root.isFullyExpanded = true;
+
+  for(let index = 0; index < 10; index += 1) {
+    root.visit(new Map([['P', 0.6]]));
+    safeChild.visit(new Map([['P', 0.6]]));
+  }
+
+  for(let index = 0; index < 2; index += 1) {
+    root.visit(new Map([['P', 1]]));
+    swingChild.visit(new Map([['P', 1]]));
+  }
+
+  mcts.root = root;
+
+  assert.equal(mcts.getMaxChild(), swingChild);
+  assert.equal(mcts.getRobustChild(), safeChild);
+  assert.equal(mcts.getBestMove(), 'safe');
+});
+
+test('simulate can use selectRolloutMove without allocating legal moves', () => {
+  const state = new RolloutSamplingState();
+  const mcts = new MCTS<RolloutSamplingState, string, 'R'>({
+    random: createSeededRandom(13),
+  });
+
+  const result = mcts.search(state, { maxIterations: 1 });
+
+  assert.equal(result.bestMove, 'advance');
+  assert.equal(state.legalMoveCalls[0], 2);
+  assert.equal(state.rolloutSelectionCalls[0], 1);
+});
+
+test('searchWithDiagnostics returns search-shape telemetry without changing engine defaults', () => {
+  const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+    random: createSeededRandom(17),
+  });
+
+  const result = mcts.searchWithDiagnostics(new TicTacToeState(), { maxIterations: 20 });
+
+  assert.ok(result.diagnostics);
+  assert.equal(result.diagnostics.createdNodes >= 1, true);
+  assert.equal(result.diagnostics.expandedNodes >= 1, true);
+  assert.equal(result.diagnostics.rolloutSimulationCount >= 1, true);
+  assert.equal(result.diagnostics.retainedNodeCount >= 1, true);
+  assert.equal(result.diagnostics.treeMaxDepth >= 1, true);
 });
