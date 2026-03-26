@@ -27,16 +27,28 @@ assert.ok(packedFiles.includes('dist/index.js'));
 assert.ok(packedFiles.includes('dist/index.d.ts'));
 assert.ok(packedFiles.includes('dist/examples/tictactoe.js'));
 assert.ok(packedFiles.includes('dist/examples/tictactoe.d.ts'));
+assert.ok(packedFiles.includes('dist/games/connect-four.js'));
+assert.ok(packedFiles.includes('dist/games/connect-four.d.ts'));
+assert.ok(packedFiles.includes('dist/games/othello.js'));
+assert.ok(packedFiles.includes('dist/games/othello.d.ts'));
+assert.ok(packedFiles.includes('dist/games/hex.js'));
+assert.ok(packedFiles.includes('dist/games/hex.d.ts'));
 assert.ok(packedFiles.includes('README.md'));
 assert.ok(!packedFiles.some((filePath) => filePath.startsWith('dist/tests/')));
 
 const runtimeModule = await import(pathToFileURL(path.join(repoRoot, 'dist/index.js')).href);
 const exampleModule = await import(pathToFileURL(path.join(repoRoot, 'dist/examples/tictactoe.js')).href);
+const connectFourModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/connect-four.js')).href);
+const othelloModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/othello.js')).href);
+const hexModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/hex.js')).href);
 
 assert.equal(typeof runtimeModule.GameState, 'function');
 assert.equal(typeof runtimeModule.MCTS, 'function');
 assert.equal(typeof runtimeModule.teamValueStrategies, 'object');
 assert.equal(typeof exampleModule.TicTacToeState, 'function');
+assert.equal(typeof connectFourModule.ConnectFourState, 'function');
+assert.equal(typeof othelloModule.OthelloState, 'function');
+assert.equal(typeof hexModule.HexState, 'function');
 
 const searchState = new exampleModule.TicTacToeState();
 const mcts = new runtimeModule.MCTS({ random: () => 0.5 });

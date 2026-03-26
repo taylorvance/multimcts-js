@@ -40,6 +40,7 @@ Explicit subpaths:
 - Configurable team-value scalarization with built-in or custom evaluators
 - Configurable final move selection with `maxChild`, `robustChild`, `maxRobustChild`, or `secureChild`
 - Optional rollout hooks for heuristic playouts or low-allocation random move sampling
+- Reusable headless game modules for `Tic-Tac-Toe`, `Connect Four`, `Othello`, and `Hex`
 
 ## Engine Notes
 
@@ -60,6 +61,12 @@ const state = new TicTacToeState();
 const result = mcts.search(state, { maxIterations: 1000 });
 console.log(result.bestMove);
 ```
+
+Additional reusable game modules are available via:
+
+- `multimcts/connect-four`
+- `multimcts/othello`
+- `multimcts/hex`
 
 Choosing a different final-action policy:
 
@@ -117,6 +124,8 @@ Built-in scenarios currently include:
 - `tictactoe-midgame`
 - `connect-four-opening`
 - `connect-four-midgame`
+- `hex-opening`
+- `hex-midgame`
 - `othello-opening`
 
 Use an external scenario module:
@@ -160,6 +169,19 @@ Compare different scalarization policies head-to-head:
 ```bash
 npm run arena -- --scenario connect-four-opening --team-value-strategy-a margin --team-value-strategy-b self
 ```
+
+Compare a new game against an older engine commit without backporting the game code:
+
+```bash
+git worktree add /tmp/multimcts-old 7075f29
+ln -s "$PWD/node_modules" /tmp/multimcts-old/node_modules
+(cd /tmp/multimcts-old && npm run build)
+npm run profile:search -- --scenario hex-opening --iterations 1200
+(cd /tmp/multimcts-old && npm run profile:search -- --module "$PWD/scripts/scenarios/hex-opening.mjs" --iterations 1200)
+npm run arena -- --engine-a . --engine-b /tmp/multimcts-old --scenario hex-opening --games 6 --iterations-a 800 --iterations-b 800
+```
+
+This works because the current scenario module can supply the current game implementation while each engine build stays pinned to its own commit.
 
 Future design notes for deferred ideas such as player identity vs team identity live in [docs/future-design-notes.md](/Users/taylorvance/Library/Mobile%20Documents/com~apple~CloudDocs/dev/multimcts-js/docs/future-design-notes.md).
 

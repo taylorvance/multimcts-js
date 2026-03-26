@@ -6,6 +6,8 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BUILTIN_SCENARIOS = {
   'connect-four-opening': './scenarios/connect-four-opening.mjs',
   'connect-four-midgame': './scenarios/connect-four-midgame.mjs',
+  'hex-opening': './scenarios/hex-opening.mjs',
+  'hex-midgame': './scenarios/hex-midgame.mjs',
   'othello-opening': './scenarios/othello-opening.mjs',
   'tictactoe-opening': './scenarios/tictactoe-opening.mjs',
 };

@@ -17,6 +17,21 @@
 			"types": "./dist/examples/tictactoe.d.ts",
 			"import": "./dist/examples/tictactoe.js",
 			"default": "./dist/examples/tictactoe.js"
+		},
+		"./connect-four": {
+			"types": "./dist/games/connect-four.d.ts",
+			"import": "./dist/games/connect-four.js",
+			"default": "./dist/games/connect-four.js"
+		},
+		"./othello": {
+			"types": "./dist/games/othello.d.ts",
+			"import": "./dist/games/othello.js",
+			"default": "./dist/games/othello.js"
+		},
+		"./hex": {
+			"types": "./dist/games/hex.d.ts",
+			"import": "./dist/games/hex.js",
+			"default": "./dist/games/hex.js"
 		}
 	},
 	"files": [

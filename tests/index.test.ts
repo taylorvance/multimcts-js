@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GameState, MCTS, teamValueStrategies } from '../src/index.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
+import { HexState, playHexMoves } from '../src/games/hex.ts';
 
 const createSeededRandom = (seed: number) => {
   let state = seed >>> 0;
@@ -433,4 +434,32 @@ test('searchWithDiagnostics returns search-shape telemetry without changing engi
   assert.equal(result.diagnostics.rolloutSimulationCount >= 1, true);
   assert.equal(result.diagnostics.retainedNodeCount >= 1, true);
   assert.equal(result.diagnostics.treeMaxDepth >= 1, true);
+});
+
+test('HexState detects a vertical win for B and reports per-team rewards', () => {
+  const state = playHexMoves([
+    0,
+    1,
+    7,
+    2,
+    14,
+    3,
+    21,
+    4,
+    28,
+    5,
+    35,
+    6,
+    42,
+  ]);
+
+  assert.equal(state.isTerminal(), true);
+  assert.deepEqual(state.getReward(), { B: 1, W: 0 });
+});
+
+test('HexState opening exposes the expected number of legal moves', () => {
+  const state = new HexState();
+
+  assert.equal(state.getLegalMoves().length, 49);
+  assert.equal(state.sampleLegalMove(createSeededRandom(37)) >= 0, true);
 });

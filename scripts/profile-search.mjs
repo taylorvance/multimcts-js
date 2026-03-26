@@ -22,6 +22,8 @@ const DEFAULT_OPTIONS = {
 const BUILTIN_SCENARIOS = {
   'connect-four-midgame': './scenarios/connect-four-midgame.mjs',
   'connect-four-opening': './scenarios/connect-four-opening.mjs',
+  'hex-midgame': './scenarios/hex-midgame.mjs',
+  'hex-opening': './scenarios/hex-opening.mjs',
   'othello-opening': './scenarios/othello-opening.mjs',
   'tictactoe-midgame': './scenarios/tictactoe-midgame.mjs',
 };
@@ -391,6 +393,12 @@ const formatResult = (summary) => {
   return lines.join('\n');
 };
 
+const formatProfileRerunTarget = (options) => (
+  options.modulePath
+    ? `--module ${JSON.stringify(options.modulePath)}`
+    : `--scenario ${options.scenario}`
+);
+
 const main = async () => {
   const rawOptions = parseOptions(process.argv.slice(2));
   const scenario = await loadScenario(rawOptions);
@@ -521,10 +529,11 @@ const main = async () => {
   }
 
   console.log(formatResult(summary));
+  const rerunTarget = formatProfileRerunTarget(options);
   console.log('\nFor engine flamegraphs, rerun with:');
-  console.log(`node --cpu-prof --experimental-strip-types scripts/profile-search.mjs --scenario ${options.scenario} --iterations ${options.iterations}`);
+  console.log(`node --cpu-prof --experimental-strip-types scripts/profile-search.mjs ${rerunTarget} --iterations ${options.iterations}`);
   console.log('For heap profiles, rerun with:');
-  console.log(`node --heap-prof --experimental-strip-types scripts/profile-search.mjs --scenario ${options.scenario} --iterations ${options.iterations}`);
+  console.log(`node --heap-prof --experimental-strip-types scripts/profile-search.mjs ${rerunTarget} --iterations ${options.iterations}`);
 };
 
 await main();
