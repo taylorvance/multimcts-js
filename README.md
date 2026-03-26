@@ -112,6 +112,35 @@ Release metadata is tracked with Changesets:
 npm run changeset
 ```
 
+Release automation uses GitHub Actions plus npm trusted publishing via OIDC. Relevant files:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `docs/release-strategy.md`
+
+Key release scripts:
+
+- `npm run changeset`
+- `npm run version-packages`
+- `npm run release`
+
+The release workflow:
+
+- verifies the repo on every `main` push
+- creates and pushes a version commit when pending changesets exist
+- publishes the package in that same run using npm trusted publishing via GitHub OIDC
+
+## Local Hooks
+
+This repo uses local hook automation through `simple-git-hooks`.
+
+`npm install` installs the hooks for this repo.
+
+Current hook behavior:
+
+- `pre-commit`: run `npm run test` when staged changes affect source, tests, scripts, or package metadata; skip docs-only and workflow-only commits
+- `pre-push`: fail if the branch is behind or diverged from its upstream, run `npm run verify`, then fail again if the upstream moved during verification
+
 Search profiling against built code:
 
 ```bash

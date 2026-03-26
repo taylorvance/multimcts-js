@@ -7,7 +7,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const npmCacheDir = path.join(repoRoot, '.tmp-npm-cache');
 
-const packResult = spawnSync('npm', ['pack', '--json', '--dry-run'], {
+const packResult = spawnSync('npm', ['pack', '--json', '--dry-run', '--ignore-scripts'], {
   cwd: repoRoot,
   encoding: 'utf8',
   env: {

@@ -48,9 +48,12 @@
 		"build": "rm -rf dist && tsc -p tsconfig.json",
 		"changeset": "changeset",
 		"clean": "rm -rf dist node_modules coverage .eslintcache *.tsbuildinfo",
+		"prepare": "simple-git-hooks",
 		"prepack": "npm run build",
+		"precommit": "node scripts/pre-commit-check.mjs",
 		"profile:search": "npm run build && node --experimental-strip-types scripts/profile-search.mjs",
 		"release": "npm run verify && changeset publish",
+		"verify:push": "node scripts/pre-push-check.mjs && npm run verify && node scripts/pre-push-check.mjs",
 		"test": "npm run typecheck && node --experimental-strip-types --test tests/index.test.ts",
 		"test:dist": "npm run build && node scripts/smoke-test-dist.mjs",
 		"typecheck": "tsc -p tsconfig.test.json",
@@ -63,6 +66,10 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/taylorvance/multimcts-js.git"
+	},
+	"simple-git-hooks": {
+		"pre-commit": "npm run precommit",
+		"pre-push": "npm run verify:push"
 	},
 	"keywords": [
 		"MCTS",
@@ -79,6 +86,7 @@
 	"devDependencies": {
 		"@changesets/cli": "^2.29.7",
 		"@types/node": "^25.5.0",
+		"simple-git-hooks": "^2.13.1",
 		"typescript": "^6.0.2"
 	}
 }

@@ -1,0 +1,51 @@
+name: Reusable Verify
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version used for install and verification steps.
+        required: false
+        default: '22.14.0'
+        type: string
+      working-directory:
+        description: Directory containing the project to verify.
+        required: false
+        default: '.'
+        type: string
+      install-command:
+        description: Command used to install dependencies.
+        required: false
+        default: npm ci
+        type: string
+      verify-command:
+        description: Command used to verify the repository.
+        required: false
+        default: npm run verify
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.install-command }}
+
+      - name: Verify repository
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.verify-command }}
