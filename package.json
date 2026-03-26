@@ -1,15 +1,26 @@
 {
 	"name": "multimcts",
-	"version": "1.2.3",
-	"description": "Monte Carlo Tree Search for multiple teams",
-	"main": "src/mcts.js",
-	"types": "multimcts.d.ts",
+	"version": "2.0.0",
+	"description": "TypeScript Monte Carlo Tree Search for multi-team games",
+	"type": "module",
+	"main": "./dist/src/index.js",
+	"types": "./dist/src/index.d.ts",
 	"exports": {
-		".": "./src/mcts.js",
-		"./tictactoe": "./examples/tictactoe.js"
+		".": {
+			"types": "./dist/src/index.d.ts",
+			"default": "./dist/src/index.js"
+		},
+		"./tictactoe": {
+			"types": "./dist/src/examples/tictactoe.d.ts",
+			"default": "./dist/src/examples/tictactoe.js"
+		}
 	},
+	"files": [
+		"dist"
+	],
 	"scripts": {
-		"test": "node --test"
+		"build": "tsc -p tsconfig.json",
+		"test": "npm run build && node --test dist/tests/index.test.js"
 	},
 	"repository": {
 		"type": "git",
@@ -26,5 +37,9 @@
 	"bugs": {
 		"url": "https://github.com/taylorvance/multimcts-js/issues"
 	},
-	"homepage": "https://github.com/taylorvance/multimcts-js#readme"
+	"homepage": "https://github.com/taylorvance/multimcts-js#readme",
+	"devDependencies": {
+		"@types/node": "^25.5.0",
+		"typescript": "^6.0.2"
+	}
 }
