@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GameState, MCTS } from '../src/index.js';
-import { TicTacToeState } from '../src/examples/tictactoe.js';
+import { GameState, MCTS } from '../src/index.ts';
+import { TicTacToeState } from '../src/examples/tictactoe.ts';
 
 const createSeededRandom = (seed: number) => {
   let state = seed >>> 0;
@@ -101,7 +101,7 @@ test('search reuses the existing root for equivalent states', () => {
   const secondResult = mcts.search(secondState, { maxIterations: 25 });
 
   assert.equal(secondResult.root, firstRoot);
-  assert.ok(secondResult.root.visits > firstRoot.children.size);
+  assert.ok(secondResult.root.visits > 25);
 });
 
 test('advanceToChild promotes an explored child to the root', () => {

@@ -1,4 +1,4 @@
-import { GameState } from '../index.js';
+import { GameState } from '../index.ts';
 
 export type TicTacToeCell = 'X' | 'O' | null;
 export type TicTacToeTeam = 'X' | 'O';

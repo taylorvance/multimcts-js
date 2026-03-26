@@ -66,7 +66,15 @@ export abstract class GameState<
 const shuffleInPlace = <T>(items: T[], random: () => number) => {
   for(let index = items.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(random() * (index + 1));
-    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+    const currentItem = items[index];
+    const swapItem = items[swapIndex];
+
+    if(currentItem === undefined || swapItem === undefined) {
+      throw new Error('Shuffle attempted to access an out-of-bounds item.');
+    }
+
+    items[index] = swapItem;
+    items[swapIndex] = currentItem;
   }
 };
 
@@ -239,7 +247,7 @@ export class MCTS<
   root: SearchNode<TState, TMove, TTeam> | null;
   private readonly now: () => number;
   private readonly random: () => number;
-  private readonly stateKey?: (state: TState) => string;
+  private readonly stateKey: ((state: TState) => string) | undefined;
 
   constructor(options: number | MCTSOptions<TState, TMove, TTeam> = {}) {
     const resolvedOptions = typeof options === 'number'
@@ -424,6 +432,9 @@ export class MCTS<
       }
 
       const move = legalMoves[Math.floor(this.random() * legalMoves.length)];
+      if(move === undefined) {
+        throw new Error('Failed to choose a legal move during rollout.');
+      }
       state = state.makeMove(move);
     }
 

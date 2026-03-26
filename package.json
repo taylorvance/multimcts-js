@@ -1,26 +1,42 @@
 {
 	"name": "multimcts",
-	"version": "2.0.0",
+	"version": "1.2.3",
 	"description": "TypeScript Monte Carlo Tree Search for multi-team games",
 	"type": "module",
-	"main": "./dist/src/index.js",
-	"types": "./dist/src/index.d.ts",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/src/index.d.ts",
-			"default": "./dist/src/index.js"
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
 		},
 		"./tictactoe": {
-			"types": "./dist/src/examples/tictactoe.d.ts",
-			"default": "./dist/src/examples/tictactoe.js"
+			"types": "./dist/examples/tictactoe.d.ts",
+			"import": "./dist/examples/tictactoe.js",
+			"default": "./dist/examples/tictactoe.js"
 		}
 	},
 	"files": [
-		"dist"
+		"dist",
+		"README.md"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.json",
-		"test": "npm run build && node --test dist/tests/index.test.js"
+		"build": "rm -rf dist && tsc -p tsconfig.json",
+		"changeset": "changeset",
+		"clean": "rm -rf dist node_modules coverage .eslintcache *.tsbuildinfo",
+		"prepack": "npm run build",
+		"release": "npm run verify && changeset publish",
+		"test": "npm run typecheck && node --experimental-strip-types --test tests/index.test.ts",
+		"test:dist": "npm run build && node scripts/smoke-test-dist.mjs",
+		"typecheck": "tsc -p tsconfig.test.json",
+		"verify": "npm run test && npm run test:dist",
+		"version-packages": "changeset version && npm install --package-lock-only"
+	},
+	"publishConfig": {
+		"access": "public"
 	},
 	"repository": {
 		"type": "git",
@@ -39,6 +55,7 @@
 	},
 	"homepage": "https://github.com/taylorvance/multimcts-js#readme",
 	"devDependencies": {
+		"@changesets/cli": "^2.29.7",
 		"@types/node": "^25.5.0",
 		"typescript": "^6.0.2"
 	}
