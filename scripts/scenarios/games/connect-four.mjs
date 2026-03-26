@@ -16,11 +16,15 @@ export class ConnectFourState extends GameState {
     board = Array(TOTAL_CELLS).fill(null),
     team = true,
     lastMove = null,
+    moveCount = null,
+    hasWinner = null,
   ) {
     super();
     this.board = board;
     this.team = team;
     this.lastMove = lastMove;
+    this.moveCount = moveCount ?? this.countMoves();
+    this.hasWinner = hasWinner ?? this.checkWinnerFromLastMove(lastMove);
   }
 
   getCurrentTeam() {
@@ -72,9 +76,16 @@ export class ConnectFourState extends GameState {
 
         const nextBoard = [...this.board];
         nextBoard[index] = this.team;
+        const hasWinner = this.checkWinnerAt(nextBoard, index);
         return {
           move: String(col),
-          nextState: new ConnectFourState(nextBoard, !this.team, index),
+          nextState: new ConnectFourState(
+            nextBoard,
+            !this.team,
+            index,
+            this.moveCount + 1,
+            hasWinner,
+          ),
         };
       }
 
@@ -120,26 +131,28 @@ export class ConnectFourState extends GameState {
       throw new Error(`Invalid Connect Four move: ${move}`);
     }
 
-    for(let row = ROWS - 1; row >= 0; row -= 1) {
-      const index = this.getIndex(row, column);
-      if(this.board[index] !== null) {
-        continue;
-      }
-
-      const nextBoard = [...this.board];
-      nextBoard[index] = this.team;
-      return new ConnectFourState(nextBoard, !this.team, index);
+    const index = this.findDropIndex(column);
+    if(index === null) {
+      throw new Error(`Illegal Connect Four move: ${move}`);
     }
 
-    throw new Error(`Illegal Connect Four move: ${move}`);
+    const nextBoard = [...this.board];
+    nextBoard[index] = this.team;
+    return new ConnectFourState(
+      nextBoard,
+      !this.team,
+      index,
+      this.moveCount + 1,
+      this.checkWinnerAt(nextBoard, index),
+    );
   }
 
   isTerminal() {
-    return this.getWinningLine() !== null || this.board.every((cell) => cell !== null);
+    return this.hasWinner || this.moveCount === TOTAL_CELLS;
   }
 
   getReward() {
-    return this.getWinningLine() ? 1 : 0;
+    return this.hasWinner ? 1 : 0;
   }
 
   toString() {
@@ -157,52 +170,82 @@ export class ConnectFourState extends GameState {
     return `${this.getCurrentTeam()}: ${rows.join('/')}`;
   }
 
-  getWinningLine() {
-    for(let row = 0; row < ROWS; row += 1) {
-      for(let col = 0; col < COLS; col += 1) {
-        const startIndex = this.getIndex(row, col);
-        const cell = this.board[startIndex];
-        if(cell === null) {
-          continue;
-        }
+  getIndex(row, col) {
+    return (row * COLS) + col;
+  }
 
-        for(const [rowDelta, colDelta] of DIRECTIONS) {
-          const line = [startIndex];
-
-          for(let step = 1; step < WIN_LENGTH; step += 1) {
-            const nextRow = row + (rowDelta * step);
-            const nextCol = col + (colDelta * step);
-            if(
-              nextRow < 0
-              || nextRow >= ROWS
-              || nextCol < 0
-              || nextCol >= COLS
-            ) {
-              line.length = 0;
-              break;
-            }
-
-            const index = this.getIndex(nextRow, nextCol);
-            if(this.board[index] !== cell) {
-              line.length = 0;
-              break;
-            }
-
-            line.push(index);
-          }
-
-          if(line.length === WIN_LENGTH) {
-            return line;
-          }
-        }
+  findDropIndex(column) {
+    for(let row = ROWS - 1; row >= 0; row -= 1) {
+      const index = this.getIndex(row, column);
+      if(this.board[index] === null) {
+        return index;
       }
     }
 
     return null;
   }
 
-  getIndex(row, col) {
-    return (row * COLS) + col;
+  checkWinnerFromLastMove(lastMove) {
+    if(lastMove === null) {
+      return false;
+    }
+
+    return this.checkWinnerAt(this.board, lastMove);
+  }
+
+  checkWinnerAt(board, index) {
+    const cell = board[index];
+    if(cell === null || cell === undefined) {
+      return false;
+    }
+
+    const row = Math.floor(index / COLS);
+    const col = index % COLS;
+
+    for(const [rowDelta, colDelta] of DIRECTIONS) {
+      let runLength = 1;
+
+      runLength += this.countDirection(board, row, col, rowDelta, colDelta, cell);
+      runLength += this.countDirection(board, row, col, -rowDelta, -colDelta, cell);
+
+      if(runLength >= WIN_LENGTH) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  countDirection(board, row, col, rowDelta, colDelta, cell) {
+    let count = 0;
+    let nextRow = row + rowDelta;
+    let nextCol = col + colDelta;
+
+    while(
+      nextRow >= 0
+      && nextRow < ROWS
+      && nextCol >= 0
+      && nextCol < COLS
+      && board[this.getIndex(nextRow, nextCol)] === cell
+    ) {
+      count += 1;
+      nextRow += rowDelta;
+      nextCol += colDelta;
+    }
+
+    return count;
+  }
+
+  countMoves() {
+    let count = 0;
+
+    for(const cell of this.board) {
+      if(cell !== null) {
+        count += 1;
+      }
+    }
+
+    return count;
   }
 }
 
