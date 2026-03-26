@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GameState, MCTS, SearchNode } from '../src/index.ts';
+import { GameState, MCTS, SearchNode, teamValueStrategies } from '../src/index.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 
 const createSeededRandom = (seed: number) => {
@@ -76,6 +76,41 @@ class ChoiceState extends GameState<'safe' | 'swing', 'P', ChoiceState> {
   }
 }
 
+class OutcomePreferenceState extends GameState<
+  'balanced' | 'selfish',
+  'A' | 'B' | 'C',
+  OutcomePreferenceState
+> {
+  readonly id: 'root' | 'balanced' | 'selfish';
+
+  constructor(id: 'root' | 'balanced' | 'selfish' = 'root') {
+    super();
+    this.id = id;
+  }
+
+  getCurrentTeam() {
+    return this.id === 'root' ? 'A' : 'B';
+  }
+
+  getLegalMoves() {
+    return this.id === 'root' ? ['balanced', 'selfish'] as const : [];
+  }
+
+  makeMove(move: 'balanced' | 'selfish') {
+    return new OutcomePreferenceState(move);
+  }
+
+  isTerminal() {
+    return this.id !== 'root';
+  }
+
+  getReward() {
+    return this.id === 'balanced'
+      ? { A: 1, B: 0.9, C: 0 }
+      : { A: 0.8, B: 0, C: 0 };
+  }
+}
+
 class RolloutSamplingState extends GameState<string, 'R', RolloutSamplingState> {
   readonly step: number;
   readonly legalMoveCalls: [number];
@@ -118,11 +153,7 @@ class RolloutSamplingState extends GameState<string, 'R', RolloutSamplingState> 
     return 1;
   }
 
-  override selectRolloutMove() {
-    if(this.step !== 1) {
-      return null;
-    }
-
+  override sampleLegalMove() {
     this.rolloutSelectionCalls[0] += 1;
     return 'finish';
   }
@@ -213,9 +244,9 @@ test('dict rewards propagate through multi-team searches', () => {
   const result = mcts.search(new ThreeTeamState(), { maxIterations: 1 });
 
   assert.equal(result.bestMove, 'finish');
-  assert.deepEqual([...result.root.rewards.entries()], [['A', 1], ['B', 0.25], ['C', -0.25]]);
+  assert.deepEqual([...result.root.utilitySums.entries()], [['A', 1], ['B', 0.25], ['C', -0.25]]);
   assert.deepEqual(
-    [...result.bestChild?.rewards.entries() ?? []],
+    [...result.bestChild?.utilitySums.entries() ?? []],
     [['A', 1], ['B', 0.25], ['C', -0.25]],
   );
 });
@@ -228,28 +259,30 @@ test('robustChild is the default final action strategy', () => {
   const safeChild = new SearchNode(new ChoiceState('safe'), createSeededRandom(5), root, 'safe');
   const swingChild = new SearchNode(new ChoiceState('swing'), createSeededRandom(5), root, 'swing');
 
-  root.children.set('safe', safeChild);
-  root.children.set('swing', swingChild);
-  root.isFullyExpanded = true;
+  while(root.takeUnexpandedMove() !== null) {
+    // Exhaust root expansion bookkeeping so the node behaves like a fully-expanded root.
+  }
+  root.attachChild('safe', safeChild);
+  root.attachChild('swing', swingChild);
 
   for(let index = 0; index < 10; index += 1) {
-    root.visit(new Map([['P', 0.6]]));
-    safeChild.visit(new Map([['P', 0.6]]));
+    root.visit(new Map([['P', 0.6]]), teamValueStrategies.self);
+    safeChild.visit(new Map([['P', 0.6]]), teamValueStrategies.self);
   }
 
   for(let index = 0; index < 2; index += 1) {
-    root.visit(new Map([['P', 1]]));
-    swingChild.visit(new Map([['P', 1]]));
+    root.visit(new Map([['P', 1]]), teamValueStrategies.self);
+    swingChild.visit(new Map([['P', 1]]), teamValueStrategies.self);
   }
 
-  mcts.root = root;
+  (mcts as unknown as { rootNode: SearchNode<ChoiceState, 'safe' | 'swing', 'P'> }).rootNode = root;
 
   assert.equal(mcts.getMaxChild(), swingChild);
   assert.equal(mcts.getRobustChild(), safeChild);
   assert.equal(mcts.getBestMove(), 'safe');
 });
 
-test('simulate can use selectRolloutMove without allocating legal moves', () => {
+test('simulate can use sampleLegalMove without allocating legal moves', () => {
   const state = new RolloutSamplingState();
   const mcts = new MCTS<RolloutSamplingState, string, 'R'>({
     random: createSeededRandom(13),
@@ -260,6 +293,73 @@ test('simulate can use selectRolloutMove without allocating legal moves', () => 
   assert.equal(result.bestMove, 'advance');
   assert.equal(state.legalMoveCalls[0], 2);
   assert.equal(state.rolloutSelectionCalls[0], 1);
+});
+
+test('TicTacToeState.sampleLegalMove does not require getLegalMoves', () => {
+  class NoListTicTacToeState extends TicTacToeState {
+    override getLegalMoves(): number[] {
+      throw new Error('getLegalMoves should not be called');
+    }
+  }
+
+  const state = new NoListTicTacToeState([
+    'X', null, 'O',
+    null, 'X', null,
+    'O', null, null,
+  ], 'X');
+  const move = state.sampleLegalMove(createSeededRandom(31));
+
+  assert.equal(state.board[move], null);
+});
+
+test('team value strategies are pure and produce expected scalar scores', () => {
+  const rewards = new Map<'A' | 'B' | 'C', number>([
+    ['A', 1],
+    ['B', 0.25],
+    ['C', 0.8],
+  ]);
+
+  assert.equal(teamValueStrategies.self('A', rewards), 1);
+  assert.ok(Math.abs(teamValueStrategies.margin('A', rewards) - (-0.05)) < 1e-9);
+  assert.ok(Math.abs(teamValueStrategies.vsBestOpponent('A', rewards) - 0.2) < 1e-9);
+});
+
+test('search can swap team value strategies without changing terminal reward shape', () => {
+  const selfMcts = new MCTS<OutcomePreferenceState, 'balanced' | 'selfish', 'A' | 'B' | 'C'>({
+    explorationBias: 0,
+    finalActionStrategy: 'maxChild',
+    random: createSeededRandom(21),
+    teamValueStrategy: 'self',
+  });
+  const marginMcts = new MCTS<OutcomePreferenceState, 'balanced' | 'selfish', 'A' | 'B' | 'C'>({
+    explorationBias: 0,
+    finalActionStrategy: 'maxChild',
+    random: createSeededRandom(21),
+    teamValueStrategy: 'margin',
+  });
+
+  assert.equal(
+    selfMcts.search(new OutcomePreferenceState(), { maxIterations: 12 }).bestMove,
+    'balanced',
+  );
+  assert.equal(
+    marginMcts.search(new OutcomePreferenceState(), { maxIterations: 12 }).bestMove,
+    'selfish',
+  );
+});
+
+test('custom team value evaluators can override the built-in strategy table', () => {
+  const mcts = new MCTS<OutcomePreferenceState, 'balanced' | 'selfish', 'A' | 'B' | 'C'>({
+    evaluateTeamValue: (_team, rewards) => (rewards.get('A') ?? 0) + (rewards.get('B') ?? 0),
+    explorationBias: 0,
+    finalActionStrategy: 'maxChild',
+    random: createSeededRandom(29),
+  });
+
+  assert.equal(
+    mcts.search(new OutcomePreferenceState(), { maxIterations: 12 }).bestMove,
+    'balanced',
+  );
 });
 
 test('searchWithDiagnostics returns search-shape telemetry without changing engine defaults', () => {

@@ -14,6 +14,7 @@ const DEFAULT_OPTIONS = {
   samples: undefined,
   scenario: 'tictactoe-midgame',
   seed: 0xc0ffee,
+  teamValueStrategy: 'margin',
   warmup: undefined,
 };
 
@@ -107,6 +108,10 @@ const parseOptions = (rawArgs) => {
         options.seed = parseNonNegativeInt(nextValue, '--seed');
         index += 1;
         break;
+      case '--team-value-strategy':
+        options.teamValueStrategy = nextValue;
+        index += 1;
+        break;
       case '--warmup':
         options.warmup = parseNonNegativeInt(nextValue, '--warmup');
         index += 1;
@@ -165,7 +170,7 @@ const createMethodStats = () => ({
   getReward: { calls: 0, totalMs: 0 },
   isTerminal: { calls: 0, totalMs: 0 },
   makeMove: { calls: 0, totalMs: 0 },
-  selectRolloutMove: { calls: 0, totalMs: 0 },
+  sampleLegalMove: { calls: 0, totalMs: 0 },
   suggestRollout: { calls: 0, totalMs: 0 },
   toString: { calls: 0, totalMs: 0 },
 });
@@ -227,6 +232,7 @@ const sampleSearch = (scenario, options, sampleIndex) => {
     explorationBias: options.explorationBias,
     finalActionStrategy: options.finalActionStrategy,
     random,
+    teamValueStrategy: options.teamValueStrategy,
   });
 
   const startWall = performance.now();
@@ -317,6 +323,7 @@ const formatResult = (summary) => {
     `Samples: ${summary.config.samples}`,
     `Warmup: ${summary.config.warmup}`,
     `Exploration bias: ${summary.config.explorationBias}`,
+    `Team value strategy: ${summary.config.teamValueStrategy}`,
     `Wall ms: avg=${summary.timing.averageMs} min=${summary.timing.minMs} max=${summary.timing.maxMs} total=${summary.timing.totalMs}`,
     `Rounds/sec: ${summary.timing.roundsPerSecond}`,
     `CPU ms: user=${summary.cpu.userMs} system=${summary.cpu.systemMs} total=${summary.cpu.totalMs}`,
@@ -400,6 +407,7 @@ const main = async () => {
       finalActionStrategy: options.finalActionStrategy,
       iterations: options.iterations,
       samples: options.samples,
+      teamValueStrategy: options.teamValueStrategy,
       warmup: options.warmup,
     },
     cpu: {
@@ -407,7 +415,7 @@ const main = async () => {
       totalMs: Number(((cpuUsage.user + cpuUsage.system) / 1000).toFixed(3)),
       userMs: Number((cpuUsage.user / 1000).toFixed(3)),
     },
-    finalActionStrategy: lastSample?.result.finalActionStrategy ?? 'unknown',
+    finalActionStrategy: options.finalActionStrategy,
     diagnostics,
     lastSample: {
       bestMove: lastSample?.result.bestMove ?? null,

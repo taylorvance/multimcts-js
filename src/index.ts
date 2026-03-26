@@ -18,6 +18,12 @@ export interface SearchMetrics {
   iterations: number;
 }
 
+export type TeamValueStrategyName = 'self' | 'margin' | 'vsBestOpponent';
+export type TeamValueEvaluator<TTeam> = (
+  team: TTeam,
+  rewards: ReadonlyMap<TTeam, number>,
+) => number;
+
 export type FinalActionStrategy =
   | 'maxChild'
   | 'robustChild'
@@ -39,12 +45,12 @@ export interface SearchDiagnostics {
 }
 
 export interface SearchNodeStats<TMove, TTeam> {
-  averageReward: number;
+  averageValue: number;
   children: SearchNodeStats<TMove, TTeam>[] | '[max depth reached]';
   isFullyExpanded: boolean;
   isTerminal: boolean;
   move: TMove | null;
-  rewards: Array<[TTeam, number]>;
+  utilitySums: Array<[TTeam, number]>;
   state: string;
   team: TTeam;
   visits: number;
@@ -54,19 +60,17 @@ export interface SearchResult<TState, TMove, TTeam> extends SearchMetrics {
   bestChild: SearchNode<TState, TMove, TTeam> | null;
   bestMove: TMove | null;
   diagnostics?: SearchDiagnostics;
-  finalActionStrategy: FinalActionStrategy;
-  maxChild: SearchNode<TState, TMove, TTeam> | null;
   root: SearchNode<TState, TMove, TTeam>;
-  robustChild: SearchNode<TState, TMove, TTeam> | null;
-  secureChild: SearchNode<TState, TMove, TTeam> | null;
 }
 
 export interface MCTSOptions<TState, TMove, TTeam> {
   explorationBias?: number;
+  evaluateTeamValue?: TeamValueEvaluator<TTeam>;
   finalActionStrategy?: FinalActionStrategy;
   now?: () => number;
   random?: () => number;
   stateKey?: (state: TState) => string;
+  teamValueStrategy?: TeamValueStrategyName;
 }
 
 export abstract class GameState<
@@ -84,8 +88,18 @@ export abstract class GameState<
     return null;
   }
 
-  selectRolloutMove(_random: () => number): TMove | null {
-    return null;
+  sampleLegalMove(random: () => number): TMove {
+    const legalMoves = this.getLegalMoves();
+    if(legalMoves.length === 0) {
+      throw new Error('Non-terminal state has no legal moves.');
+    }
+
+    const move = legalMoves[Math.floor(random() * legalMoves.length)];
+    if(move === undefined) {
+      throw new Error('Failed to choose a legal move.');
+    }
+
+    return move;
   }
 
   getStateKey(): string {
@@ -155,6 +169,48 @@ const rewardEntries = <TTeam>(rewards: RewardInput<TTeam>, terminalTeam: TTeam) 
   );
 };
 
+const getRewardForTeam = <TTeam>(team: TTeam, rewards: ReadonlyMap<TTeam, number>) => (
+  rewards.get(team) ?? 0
+);
+
+const selfTeamValue = <TTeam>(team: TTeam, rewards: ReadonlyMap<TTeam, number>) => (
+  getRewardForTeam(team, rewards)
+);
+
+const marginTeamValue = <TTeam>(team: TTeam, rewards: ReadonlyMap<TTeam, number>) => {
+  let own = 0;
+  let otherTotal = 0;
+
+  for(const [candidateTeam, reward] of rewards.entries()) {
+    if(candidateTeam === team) {
+      own += reward;
+    } else {
+      otherTotal += reward;
+    }
+  }
+
+  return own - otherTotal;
+};
+
+const vsBestOpponentTeamValue = <TTeam>(team: TTeam, rewards: ReadonlyMap<TTeam, number>) => {
+  const own = getRewardForTeam(team, rewards);
+  let bestOpponent = Number.NEGATIVE_INFINITY;
+
+  for(const [candidateTeam, reward] of rewards.entries()) {
+    if(candidateTeam !== team && reward > bestOpponent) {
+      bestOpponent = reward;
+    }
+  }
+
+  return own - (bestOpponent === Number.NEGATIVE_INFINITY ? 0 : bestOpponent);
+};
+
+export const teamValueStrategies = {
+  margin: marginTeamValue,
+  self: selfTeamValue,
+  vsBestOpponent: vsBestOpponentTeamValue,
+} as const;
+
 const createSearchDiagnostics = (): SearchDiagnostics => ({
   createdNodes: 0,
   expandedNodes: 0,
@@ -183,20 +239,20 @@ const stateToString = (state: unknown) => {
 };
 
 export class SearchNode<TState, TMove, TTeam> {
-  averageReward: number;
-  readonly children: Map<TMove, SearchNode<TState, TMove, TTeam>>;
-  isFullyExpanded: boolean;
+  private averageValueSum: number;
+  private readonly childNodes: Map<TMove, SearchNode<TState, TMove, TTeam>>;
+  private fullyExpanded: boolean;
   readonly isTerminal: boolean;
   readonly move: TMove | null;
-  parent: SearchNode<TState, TMove, TTeam> | null;
-  readonly remainingMoves: TMove[];
-  readonly rewards: Map<TTeam, number>;
+  private parentNode: SearchNode<TState, TMove, TTeam> | null;
+  private readonly remainingMoves: TMove[];
+  private readonly utilitySumsMap: Map<TTeam, number>;
   readonly state: TState;
   readonly team: TTeam;
   private inverseSqrtVisits: number;
   private sqrtLogVisits: number;
-  private totalReward: number;
-  visits: number;
+  private visitCount: number;
+  private meanValue: number;
 
   constructor(
     state: TState & {
@@ -209,17 +265,17 @@ export class SearchNode<TState, TMove, TTeam> {
     move: TMove | null = null,
   ) {
     this.state = state;
-    this.parent = parent;
+    this.parentNode = parent;
     this.move = move;
-    this.children = new Map();
-    this.visits = 0;
-    this.rewards = new Map();
-    this.totalReward = 0;
-    this.averageReward = 0;
+    this.childNodes = new Map();
+    this.visitCount = 0;
+    this.utilitySumsMap = new Map();
+    this.averageValueSum = 0;
+    this.meanValue = 0;
     this.sqrtLogVisits = 0;
     this.inverseSqrtVisits = 0;
     this.isTerminal = state.isTerminal();
-    this.isFullyExpanded = this.isTerminal;
+    this.fullyExpanded = this.isTerminal;
 
     if(this.isTerminal) {
       this.remainingMoves = [];
@@ -232,73 +288,116 @@ export class SearchNode<TState, TMove, TTeam> {
     }
 
     this.team = state.getCurrentTeam();
+  }
 
-    if(this.parent) {
-      this.rewards.set(this.parent.team, 0);
+  get children(): ReadonlyMap<TMove, SearchNode<TState, TMove, TTeam>> {
+    return this.childNodes;
+  }
+
+  get isFullyExpanded() {
+    return this.fullyExpanded;
+  }
+
+  get parent() {
+    return this.parentNode;
+  }
+
+  get utilitySums(): ReadonlyMap<TTeam, number> {
+    return this.utilitySumsMap;
+  }
+
+  get averageValue() {
+    return this.meanValue;
+  }
+
+  get visits() {
+    return this.visitCount;
+  }
+
+  visit(
+    rewards: ReadonlyMap<TTeam, number>,
+    evaluateTeamValue: TeamValueEvaluator<TTeam>,
+  ) {
+    this.visitCount += 1;
+    this.sqrtLogVisits = Math.sqrt(Math.log(this.visitCount));
+    this.inverseSqrtVisits = 1 / Math.sqrt(this.visitCount);
+
+    for(const [team, reward] of rewards.entries()) {
+      this.utilitySumsMap.set(team, (this.utilitySumsMap.get(team) ?? 0) + reward);
+    }
+
+    if(this.parentNode) {
+      this.averageValueSum += evaluateTeamValue(this.parentNode.team, rewards);
+      this.meanValue = this.averageValueSum / this.visitCount;
     }
   }
 
-  visit(rewards: ReadonlyMap<TTeam, number>) {
-    this.visits += 1;
-    this.sqrtLogVisits = Math.sqrt(Math.log(this.visits));
-    this.inverseSqrtVisits = 1 / Math.sqrt(this.visits);
+  detachFromParent() {
+    this.parentNode = null;
+  }
 
-    for(const [team, reward] of rewards.entries()) {
-      this.rewards.set(team, (this.rewards.get(team) ?? 0) + reward);
-      this.totalReward += reward;
+  attachChild(move: TMove, child: SearchNode<TState, TMove, TTeam>) {
+    this.childNodes.set(move, child);
+  }
+
+  takeUnexpandedMove() {
+    const move = this.remainingMoves.pop();
+    if(move === undefined) {
+      return null;
     }
 
-    if(this.parent) {
-      const parentReward = this.rewards.get(this.parent.team) ?? 0;
-      this.averageReward = ((2 * parentReward) - this.totalReward) / this.visits;
+    if(this.remainingMoves.length === 0) {
+      this.fullyExpanded = true;
     }
+
+    return move;
   }
 
   uncertainty(explorationBias: number) {
-    if(!this.parent || this.visits === 0 || this.parent.visits === 0) {
+    if(!this.parentNode || this.visitCount === 0 || this.parentNode.visitCount === 0) {
       return Number.POSITIVE_INFINITY;
     }
 
-    return explorationBias * this.parent.sqrtLogVisits * this.inverseSqrtVisits;
+    return explorationBias * this.parentNode.sqrtLogVisits * this.inverseSqrtVisits;
   }
 
   calcScore(explorationBias: number) {
-    if(!this.parent) {
-      return this.averageReward;
+    if(!this.parentNode) {
+      return this.meanValue;
     }
 
-    if(this.visits === 0 || this.parent.visits === 0) {
+    if(this.visitCount === 0 || this.parentNode.visitCount === 0) {
       return Number.POSITIVE_INFINITY;
     }
 
-    return this.averageReward + this.uncertainty(explorationBias);
+    return this.meanValue + this.uncertainty(explorationBias);
   }
 
   lowerConfidenceBound(explorationBias: number) {
-    if(!this.parent) {
-      return this.averageReward;
+    if(!this.parentNode) {
+      return this.meanValue;
     }
 
-    return this.averageReward - this.uncertainty(explorationBias);
+    return this.meanValue - this.uncertainty(explorationBias);
   }
 
   getStats(depth = 0): SearchNodeStats<TMove, TTeam> {
     const childStats = depth > 0
-      ? [...this.children.values()]
+      ? [...this.childNodes.values()]
         .sort((left, right) => right.visits - left.visits)
         .map((child) => child.getStats(depth - 1))
       : '[max depth reached]';
 
     return {
-      averageReward: this.averageReward,
+      averageValue: this.meanValue,
       children: childStats,
-      isFullyExpanded: this.isFullyExpanded,
+      isFullyExpanded: this.fullyExpanded,
       isTerminal: this.isTerminal,
       move: this.move,
-      rewards: [...this.rewards.entries()],
+      utilitySums: [...this.utilitySumsMap.entries()],
       state: stateToString(this.state),
       team: this.team,
-      visits: this.visits,
+      visits: this.visitCount,
     };
   }
 }
@@ -338,9 +437,10 @@ export class MCTS<
   TMove = string,
   TTeam = string,
 > {
+  readonly evaluateTeamValue: TeamValueEvaluator<TTeam>;
   readonly explorationBias: number;
   readonly finalActionStrategy: FinalActionStrategy;
-  root: SearchNode<TState, TMove, TTeam> | null;
+  private rootNode: SearchNode<TState, TMove, TTeam> | null;
   private readonly now: () => number;
   private readonly random: () => number;
   private readonly stateKey: ((state: TState) => string) | undefined;
@@ -357,23 +457,29 @@ export class MCTS<
 
     this.explorationBias = explorationBias;
     this.finalActionStrategy = resolvedOptions.finalActionStrategy ?? 'robustChild';
+    this.evaluateTeamValue = resolvedOptions.evaluateTeamValue
+      ?? teamValueStrategies[resolvedOptions.teamValueStrategy ?? 'margin'];
     this.random = resolvedOptions.random ?? Math.random;
     this.now = resolvedOptions.now ?? (() => performance.now());
     this.stateKey = resolvedOptions.stateKey;
-    this.root = null;
+    this.rootNode = null;
+  }
+
+  get root() {
+    return this.rootNode;
   }
 
   reset() {
-    this.root = null;
+    this.rootNode = null;
   }
 
-  initializeRoot(state: TState) {
-    this.root = new SearchNode(state, this.random);
-    return this.root;
+  private initializeRoot(state: TState) {
+    this.rootNode = new SearchNode(state, this.random);
+    return this.rootNode;
   }
 
-  ensureRoot(state: TState) {
-    if(!this.root || !this.statesMatch(this.root.state, state)) {
+  private ensureRoot(state: TState) {
+    if(!this.rootNode || !this.statesMatch(this.rootNode.state, state)) {
       return {
         reused: false,
         root: this.initializeRoot(state),
@@ -382,7 +488,7 @@ export class MCTS<
 
     return {
       reused: true,
-      root: this.root,
+      root: this.rootNode,
     };
   }
 
@@ -427,10 +533,6 @@ export class MCTS<
       && this.now() < endTime
     );
 
-    const maxChild = this.getMaxChild(root);
-    const robustChild = this.getRobustChild(root);
-    const secureChild = this.getSecureChild(root);
-
     if(diagnostics) {
       finalizeSearchDiagnostics(root, diagnostics);
     }
@@ -439,12 +541,8 @@ export class MCTS<
       bestChild: this.getFinalChild(root),
       bestMove: this.getBestMove(root),
       elapsedMs: this.now() - startTime,
-      finalActionStrategy: this.finalActionStrategy,
       iterations,
-      maxChild,
       root,
-      robustChild,
-      secureChild,
     };
 
     if(diagnostics) {
@@ -455,7 +553,7 @@ export class MCTS<
   }
 
   executeRound(
-    root: SearchNode<TState, TMove, TTeam> | null = this.root,
+    root: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
     diagnostics: SearchDiagnostics | null = null,
   ) {
     if(!root) {
@@ -467,11 +565,11 @@ export class MCTS<
     this.backpropagate(selection.node, rewards);
   }
 
-  getMaxChild(node: SearchNode<TState, TMove, TTeam> | null = this.root) {
+  getMaxChild(node: SearchNode<TState, TMove, TTeam> | null = this.rootNode) {
     return this.getBestChild(node, 0);
   }
 
-  getRobustChild(node: SearchNode<TState, TMove, TTeam> | null = this.root) {
+  getRobustChild(node: SearchNode<TState, TMove, TTeam> | null = this.rootNode) {
     if(!node || node.children.size === 0) {
       return null;
     }
@@ -483,10 +581,10 @@ export class MCTS<
     for(const child of node.children.values()) {
       if(
         child.visits > bestVisits
-        || (child.visits === bestVisits && child.averageReward > bestReward)
+        || (child.visits === bestVisits && child.averageValue > bestReward)
       ) {
         bestVisits = child.visits;
-        bestReward = child.averageReward;
+        bestReward = child.averageValue;
         bestChild = child;
       }
     }
@@ -495,7 +593,7 @@ export class MCTS<
   }
 
   getSecureChild(
-    node: SearchNode<TState, TMove, TTeam> | null = this.root,
+    node: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
     explorationBias = this.explorationBias,
   ) {
     if(!node || node.children.size === 0) {
@@ -517,7 +615,7 @@ export class MCTS<
   }
 
   getBestChild(
-    node: SearchNode<TState, TMove, TTeam> | null = this.root,
+    node: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
     explorationBias = this.explorationBias,
   ) {
     if(!node || node.children.size === 0) {
@@ -539,7 +637,7 @@ export class MCTS<
   }
 
   getFinalChild(
-    node: SearchNode<TState, TMove, TTeam> | null = this.root,
+    node: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
     strategy = this.finalActionStrategy,
   ) {
     switch(strategy) {
@@ -564,16 +662,16 @@ export class MCTS<
     }
   }
 
-  getBestMove(node: SearchNode<TState, TMove, TTeam> | null = this.root) {
+  getBestMove(node: SearchNode<TState, TMove, TTeam> | null = this.rootNode) {
     return this.getFinalChild(node)?.move ?? null;
   }
 
   advanceToChild(move: TMove, nextState?: TState) {
-    if(!this.root) {
+    if(!this.rootNode) {
       return null;
     }
 
-    const child = this.root.children.get(move) ?? null;
+    const child = this.rootNode.children.get(move) ?? null;
     if(!child) {
       return null;
     }
@@ -582,8 +680,8 @@ export class MCTS<
       return null;
     }
 
-    child.parent = null;
-    this.root = child;
+    child.detachFromParent();
+    this.rootNode = child;
     return child;
   }
 
@@ -638,18 +736,14 @@ export class MCTS<
     node: SearchNode<TState, TMove, TTeam>,
     diagnostics: SearchDiagnostics | null,
   ) {
-    const move = node.remainingMoves.pop();
-    if(move === undefined) {
+    const move = node.takeUnexpandedMove();
+    if(move === null) {
       throw new Error('Cannot expand a node with no remaining moves.');
-    }
-
-    if(node.remainingMoves.length === 0) {
-      node.isFullyExpanded = true;
     }
 
     const childState = node.state.makeMove(move);
     const childNode = new SearchNode(childState, this.random, node, move);
-    node.children.set(move, childNode);
+    node.attachChild(move, childNode);
 
     if(diagnostics) {
       diagnostics.createdNodes += 1;
@@ -689,22 +783,7 @@ export class MCTS<
         continue;
       }
 
-      const rolloutMove = state.selectRolloutMove(this.random);
-      if(rolloutMove !== null) {
-        state = state.makeMove(rolloutMove);
-        rolloutDepth += 1;
-        continue;
-      }
-
-      const legalMoves = state.getLegalMoves();
-      if(legalMoves.length === 0) {
-        throw new Error('Non-terminal state has no legal moves.');
-      }
-
-      const move = legalMoves[Math.floor(this.random() * legalMoves.length)];
-      if(move === undefined) {
-        throw new Error('Failed to choose a legal move during rollout.');
-      }
+      const move = state.sampleLegalMove(this.random);
       state = state.makeMove(move);
       rolloutDepth += 1;
     }
@@ -727,7 +806,7 @@ export class MCTS<
     let currentNode: SearchNode<TState, TMove, TTeam> | null = node;
 
     while(currentNode) {
-      currentNode.visit(rewards);
+      currentNode.visit(rewards, this.evaluateTeamValue);
       currentNode = currentNode.parent;
     }
   }

@@ -16,6 +16,9 @@ Root exports:
 - `type SearchMetrics`
 - `type SearchNodeStats`
 - `type SearchResult`
+ - `type TeamValueEvaluator`
+ - `type TeamValueStrategyName`
+ - `teamValueStrategies`
 
 Explicit subpaths:
 
@@ -32,16 +35,18 @@ Explicit subpaths:
 
 - Typed `GameState<TMove, TTeam, TState>` base class
 - Structured `search()` results with metrics and tree access
-- First-class tree reuse through `ensureRoot()` and `advanceToChild()`
+- Tree reuse through `advanceToChild()`
 - `Map`-based move and reward storage
+- Configurable team-value scalarization with built-in or custom evaluators
 - Configurable final move selection with `maxChild`, `robustChild`, `maxRobustChild`, or `secureChild`
 - Optional rollout hooks for heuristic playouts or low-allocation random move sampling
 
 ## Engine Notes
 
 - The default final-action strategy is `robustChild`, which returns the most visited root child rather than the highest raw mean value.
+- The default team-value strategy is `margin`, which scores a team by `ownValue - sum(otherTeamValues)`.
 - `suggestRollout()` is the strongest rollout hook when a game can cheaply produce both the chosen move and the successor state.
-- `selectRolloutMove()` is a lighter hook for games that can sample a rollout move faster than building a full legal-move list on every playout step.
+- `sampleLegalMove()` defaults to random selection from `getLegalMoves()`, and can be overridden when a game can sample a rollout move faster without materializing the full move list.
 
 ## Example
 
@@ -61,6 +66,22 @@ Choosing a different final-action policy:
 ```ts
 const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
   finalActionStrategy: 'maxChild',
+});
+```
+
+Choosing a different team-value policy:
+
+```ts
+const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+  teamValueStrategy: 'self',
+});
+```
+
+Or provide a custom evaluator:
+
+```ts
+const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+  evaluateTeamValue: (team, rewards) => (rewards.get(team) ?? 0),
 });
 ```
 
@@ -110,6 +131,12 @@ Override the final move policy during a profile run:
 npm run profile:search -- --scenario othello-opening --final-action-strategy secureChild
 ```
 
+Override the team-value strategy during a profile run:
+
+```bash
+npm run profile:search -- --scenario connect-four-midgame --team-value-strategy self
+```
+
 Run head-to-head matches between two built engines:
 
 ```bash
@@ -121,6 +148,14 @@ Compare two local checkouts or branches by pointing each side at a different bui
 ```bash
 npm run arena -- --engine-a . --engine-b ../multimcts-js-other-checkout --scenario connect-four-opening
 ```
+
+Compare different scalarization policies head-to-head:
+
+```bash
+npm run arena -- --scenario connect-four-opening --team-value-strategy-a margin --team-value-strategy-b self
+```
+
+Future design notes for deferred ideas such as player identity vs team identity live in [docs/future-design-notes.md](/Users/taylorvance/Library/Mobile%20Documents/com~apple~CloudDocs/dev/multimcts-js/docs/future-design-notes.md).
 
 For CPU and heap profiles without adding engine overhead:
 

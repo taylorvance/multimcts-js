@@ -25,6 +25,8 @@ const DEFAULT_OPTIONS = {
   modulePath: null,
   scenario: 'tictactoe-opening',
   seed: 0x51ced,
+  teamValueStrategyA: 'margin',
+  teamValueStrategyB: 'margin',
 };
 
 const parsePositiveInt = (value, flagName) => {
@@ -115,6 +117,14 @@ const parseOptions = (rawArgs) => {
         options.seed = parsePositiveInt(nextValue, '--seed');
         index += 1;
         break;
+      case '--team-value-strategy-a':
+        options.teamValueStrategyA = nextValue;
+        index += 1;
+        break;
+      case '--team-value-strategy-b':
+        options.teamValueStrategyB = nextValue;
+        index += 1;
+        break;
       default:
         throw new Error(`Unknown argument: ${arg}`);
     }
@@ -190,6 +200,7 @@ const createAgent = (engine, options, suffix, seed) => new engine.MCTS({
   explorationBias: options[`explorationBias${suffix}`],
   finalActionStrategy: options[`finalActionStrategy${suffix}`],
   random: createSeededRandom(seed),
+  teamValueStrategy: options[`teamValueStrategy${suffix}`],
 });
 
 const getTerminalOutcome = (state, terminalTeam) => {
@@ -339,11 +350,13 @@ const main = async () => {
         explorationBias: options.explorationBiasA,
         finalActionStrategy: options.finalActionStrategyA,
         modulePath: engineA.modulePath,
+        teamValueStrategy: options.teamValueStrategyA,
       },
       B: {
         explorationBias: options.explorationBiasB,
         finalActionStrategy: options.finalActionStrategyB,
         modulePath: engineB.modulePath,
+        teamValueStrategy: options.teamValueStrategyB,
       },
     },
     scenario: {
@@ -363,6 +376,7 @@ const main = async () => {
   console.log(`Engine B: ${summary.engines.B.modulePath}`);
   console.log(`Games: ${summary.config.games}`);
   console.log(`Iterations: A=${summary.config.iterationsA} B=${summary.config.iterationsB}`);
+  console.log(`Team value strategies: A=${summary.engines.A.teamValueStrategy} B=${summary.engines.B.teamValueStrategy}`);
   console.log(`Wins: A=${totals.A.wins} B=${totals.B.wins} draws=${totals.draws}`);
   console.log(`Average move time ms: A=${totals.A.avgMoveMs} B=${totals.B.avgMoveMs}`);
   console.log(`Average plies per game: ${Number((totals.moves / summary.config.games).toFixed(3))}`);

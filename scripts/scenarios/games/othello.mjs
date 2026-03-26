@@ -59,6 +59,32 @@ export class OthelloState extends GameState {
     return ['pass'];
   }
 
+  sampleLegalMove(random) {
+    if(this.isTerminal()) {
+      throw new Error('Cannot sample a legal move from a terminal Othello state.');
+    }
+
+    let legalCount = 0;
+    let chosenIndex = null;
+
+    for(let index = 0; index < TOTAL_CELLS; index += 1) {
+      if(this.getFlips(index, this.team).length === 0) {
+        continue;
+      }
+
+      legalCount += 1;
+      if(Math.floor(random() * legalCount) === 0) {
+        chosenIndex = index;
+      }
+    }
+
+    if(legalCount === 0) {
+      return 'pass';
+    }
+
+    return String(chosenIndex);
+  }
+
   makeMove(move) {
     if(move === 'pass') {
       if(this.isTerminal()) {
