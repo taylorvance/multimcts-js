@@ -39,6 +39,51 @@ export class ConnectFourState extends GameState {
     return moves;
   }
 
+  suggestRollout(random) {
+    let legalCount = 0;
+
+    for(let col = 0; col < COLS; col += 1) {
+      if(this.board[this.getIndex(0, col)] === null) {
+        legalCount += 1;
+      }
+    }
+
+    if(legalCount === 0) {
+      throw new Error('Non-terminal Connect Four state has no legal moves.');
+    }
+
+    let target = Math.floor(random() * legalCount);
+
+    for(let col = 0; col < COLS; col += 1) {
+      if(this.board[this.getIndex(0, col)] !== null) {
+        continue;
+      }
+
+      if(target !== 0) {
+        target -= 1;
+        continue;
+      }
+
+      for(let row = ROWS - 1; row >= 0; row -= 1) {
+        const index = this.getIndex(row, col);
+        if(this.board[index] !== null) {
+          continue;
+        }
+
+        const nextBoard = [...this.board];
+        nextBoard[index] = this.team;
+        return {
+          move: String(col),
+          nextState: new ConnectFourState(nextBoard, !this.team, index),
+        };
+      }
+
+      throw new Error(`Failed to apply sampled Connect Four move: ${col}`);
+    }
+
+    throw new Error('Failed to sample a legal Connect Four move.');
+  }
+
   sampleLegalMove(random) {
     let legalCount = 0;
 

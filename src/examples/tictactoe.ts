@@ -44,6 +44,41 @@ export class TicTacToeState extends GameState<TicTacToeMove, TicTacToeTeam, TicT
     return moves;
   }
 
+  override suggestRollout(random: () => number) {
+    let emptyCount = 0;
+
+    for(const cell of this.board) {
+      if(cell === null) {
+        emptyCount += 1;
+      }
+    }
+
+    if(emptyCount === 0) {
+      throw new Error('Non-terminal Tic-Tac-Toe state has no legal moves.');
+    }
+
+    let target = Math.floor(random() * emptyCount);
+    const nextBoard = [...this.board];
+
+    for(let index = 0; index < this.board.length; index += 1) {
+      if(this.board[index] !== null) {
+        continue;
+      }
+
+      if(target === 0) {
+        nextBoard[index] = this.team;
+        return {
+          move: index,
+          nextState: new TicTacToeState(nextBoard, this.team === 'X' ? 'O' : 'X'),
+        };
+      }
+
+      target -= 1;
+    }
+
+    throw new Error('Failed to sample a legal Tic-Tac-Toe move.');
+  }
+
   override sampleLegalMove(random: () => number) {
     let emptyCount = 0;
 

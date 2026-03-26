@@ -40,7 +40,7 @@ export class OthelloState extends GameState {
   }
 
   getLegalMoves() {
-    if(this.isTerminal()) {
+    if(this.isBoardFull()) {
       return [];
     }
 
@@ -56,11 +56,57 @@ export class OthelloState extends GameState {
       return moves;
     }
 
-    return ['pass'];
+    return this.hasAnyLegalMoveForTeam(!this.team) ? ['pass'] : [];
+  }
+
+  suggestRollout(random) {
+    if(this.isBoardFull()) {
+      throw new Error('Cannot suggest a rollout move from a terminal Othello state.');
+    }
+
+    let legalCount = 0;
+    let chosenIndex = null;
+    let chosenFlips = null;
+
+    for(let index = 0; index < TOTAL_CELLS; index += 1) {
+      const flips = this.getFlips(index, this.team);
+      if(flips.length === 0) {
+        continue;
+      }
+
+      legalCount += 1;
+      if(Math.floor(random() * legalCount) === 0) {
+        chosenIndex = index;
+        chosenFlips = flips;
+      }
+    }
+
+    if(legalCount === 0) {
+      if(!this.hasAnyLegalMoveForTeam(!this.team)) {
+        throw new Error('Cannot suggest a rollout move from a terminal Othello state.');
+      }
+
+      return {
+        move: 'pass',
+        nextState: new OthelloState(this.board, !this.team, null),
+      };
+    }
+
+    const nextBoard = [...this.board];
+    nextBoard[chosenIndex] = this.team;
+
+    for(const flipIndex of chosenFlips) {
+      nextBoard[flipIndex] = this.team;
+    }
+
+    return {
+      move: String(chosenIndex),
+      nextState: new OthelloState(nextBoard, !this.team, chosenIndex),
+    };
   }
 
   sampleLegalMove(random) {
-    if(this.isTerminal()) {
+    if(this.isBoardFull()) {
       throw new Error('Cannot sample a legal move from a terminal Othello state.');
     }
 
@@ -79,6 +125,10 @@ export class OthelloState extends GameState {
     }
 
     if(legalCount === 0) {
+      if(!this.hasAnyLegalMoveForTeam(!this.team)) {
+        throw new Error('Cannot sample a legal move from a terminal Othello state.');
+      }
+
       return 'pass';
     }
 
@@ -120,12 +170,12 @@ export class OthelloState extends GameState {
   }
 
   isTerminal() {
-    if(this.board.every((cell) => cell !== null)) {
+    if(this.isBoardFull()) {
       return true;
     }
 
-    return this.getLegalMovesForTeam(true).length === 0
-      && this.getLegalMovesForTeam(false).length === 0;
+    return !this.hasAnyLegalMoveForTeam(true)
+      && !this.hasAnyLegalMoveForTeam(false);
   }
 
   getReward() {
@@ -184,6 +234,16 @@ export class OthelloState extends GameState {
     return moves;
   }
 
+  hasAnyLegalMoveForTeam(team) {
+    for(let index = 0; index < TOTAL_CELLS; index += 1) {
+      if(this.getFlips(index, team).length > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   getFlips(index, team) {
     if(index < 0 || index >= TOTAL_CELLS || this.board[index] !== null) {
       return [];
@@ -223,6 +283,16 @@ export class OthelloState extends GameState {
 
   getIndex(row, col) {
     return (row * COLS) + col;
+  }
+
+  isBoardFull() {
+    for(const cell of this.board) {
+      if(cell === null) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }
 

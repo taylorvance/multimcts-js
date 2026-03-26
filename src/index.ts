@@ -97,7 +97,7 @@ export abstract class GameState<
   abstract isTerminal(): boolean;
   abstract getReward(terminalTeam: TTeam): RewardInput<TTeam>;
 
-  suggestRollout(): RolloutSuggestion<TMove, TState> | null {
+  suggestRollout(_random: () => number): RolloutSuggestion<TMove, TState> | null {
     return null;
   }
 
@@ -798,7 +798,7 @@ export class MCTS<
     let rolloutDepth = 0;
 
     while(!state.isTerminal()) {
-      const suggestion = state.suggestRollout();
+      const suggestion = state.suggestRollout(this.random);
       terminalTeam = state.getCurrentTeam();
 
       if(suggestion) {

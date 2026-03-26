@@ -45,7 +45,7 @@ Explicit subpaths:
 
 - The default final-action strategy is `robustChild`, which returns the most visited root child rather than the highest raw mean value.
 - The default team-value strategy is `margin`, which scores a team by `ownValue - sum(otherTeamValues)`.
-- `suggestRollout()` is the strongest rollout hook when a game can cheaply produce both the chosen move and the successor state.
+- `suggestRollout(random)` is the strongest rollout hook when a game can cheaply produce both the chosen move and the successor state in one pass.
 - `sampleLegalMove()` defaults to random selection from `getLegalMoves()`, and can be overridden when a game can sample a rollout move faster without materializing the full move list.
 
 ## Example

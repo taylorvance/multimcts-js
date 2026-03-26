@@ -159,6 +159,65 @@ class RolloutSamplingState extends GameState<string, 'R', RolloutSamplingState> 
   }
 }
 
+class SuggestionRolloutState extends GameState<string, 'S', SuggestionRolloutState> {
+  readonly step: number;
+  readonly suggestionCalls: [number];
+  readonly sampledRandomValues: number[];
+
+  constructor(
+    step = 0,
+    suggestionCalls: [number] = [0],
+    sampledRandomValues: number[] = [],
+  ) {
+    super();
+    this.step = step;
+    this.suggestionCalls = suggestionCalls;
+    this.sampledRandomValues = sampledRandomValues;
+  }
+
+  getCurrentTeam() {
+    return 'S' as const;
+  }
+
+  getLegalMoves() {
+    return this.step < 2 ? ['expand'] : [];
+  }
+
+  makeMove(_move: string) {
+    return new SuggestionRolloutState(
+      this.step + 1,
+      this.suggestionCalls,
+      this.sampledRandomValues,
+    );
+  }
+
+  isTerminal() {
+    return this.step >= 2;
+  }
+
+  getReward() {
+    return 1;
+  }
+
+  override suggestRollout(random: () => number) {
+    this.suggestionCalls[0] += 1;
+    this.sampledRandomValues.push(random());
+
+    return {
+      move: 'rollout',
+      nextState: new SuggestionRolloutState(
+        this.step + 1,
+        this.suggestionCalls,
+        this.sampledRandomValues,
+      ),
+    };
+  }
+
+  override sampleLegalMove(_random: () => number): string {
+    throw new Error('sampleLegalMove should not be called when suggestRollout is provided.');
+  }
+}
+
 test('search validates limits', () => {
   const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>();
 
@@ -273,6 +332,25 @@ test('simulate can use sampleLegalMove without allocating legal moves', () => {
   assert.equal(result.bestMove, 'advance');
   assert.equal(state.legalMoveCalls[0], 2);
   assert.equal(state.rolloutSelectionCalls[0], 1);
+});
+
+test('simulate passes rng through suggestRollout and uses its next state directly', () => {
+  const state = new SuggestionRolloutState();
+  const mcts = new MCTS<SuggestionRolloutState, string, 'S'>({
+    random: createSeededRandom(23),
+  });
+
+  const result = mcts.search(state, { maxIterations: 1 });
+
+  assert.equal(result.bestMove, 'expand');
+  assert.equal(state.suggestionCalls[0], 1);
+  assert.equal(state.sampledRandomValues.length, 1);
+  const sampledValue = state.sampledRandomValues[0];
+  assert.notEqual(sampledValue, undefined);
+  if(sampledValue === undefined) {
+    throw new Error('Expected suggestRollout to record an RNG sample.');
+  }
+  assert.ok(sampledValue >= 0 && sampledValue < 1);
 });
 
 test('TicTacToeState.sampleLegalMove does not require getLegalMoves', () => {
