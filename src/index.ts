@@ -332,25 +332,29 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
   }
 
   visit(
-    rewards: ReadonlyMap<TTeam, number>,
-    evaluateTeamValue: TeamValueEvaluator<TTeam>,
+    rewardPairs: ReadonlyArray<readonly [TTeam, number]>,
+    parentTeamValue: number | null,
   ) {
     this.visitCount += 1;
     this.sqrtLogVisits = Math.sqrt(Math.log(this.visitCount));
     this.inverseSqrtVisits = 1 / Math.sqrt(this.visitCount);
 
-    for(const [team, reward] of rewards.entries()) {
+    for(const [team, reward] of rewardPairs) {
       this.utilitySumsMap.set(team, (this.utilitySumsMap.get(team) ?? 0) + reward);
     }
 
-    if(this.parentNode) {
-      this.averageValueSum += evaluateTeamValue(this.parentNode.team, rewards);
+    if(parentTeamValue !== null) {
+      this.averageValueSum += parentTeamValue;
       this.meanValue = this.averageValueSum / this.visitCount;
     }
   }
 
   detachFromParent() {
     this.parentNode = null;
+  }
+
+  getParentNode() {
+    return this.parentNode;
   }
 
   attachChild(move: TMove, child: TreeNode<TState, TMove, TTeam>) {
@@ -396,6 +400,46 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
     }
 
     return this.meanValue - this.uncertainty(explorationBias);
+  }
+
+  selectBestChild(explorationBias: number) {
+    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for(const child of this.childNodes.values()) {
+      let score = Number.POSITIVE_INFINITY;
+
+      if(child.visitCount > 0 && this.visitCount > 0) {
+        score = child.meanValue + (explorationBias * this.sqrtLogVisits * child.inverseSqrtVisits);
+      }
+
+      if(score > bestScore) {
+        bestScore = score;
+        bestChild = child;
+      }
+    }
+
+    return bestChild;
+  }
+
+  selectSecureChild(explorationBias: number) {
+    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
+    let bestBound = Number.NEGATIVE_INFINITY;
+
+    for(const child of this.childNodes.values()) {
+      let bound = Number.POSITIVE_INFINITY;
+
+      if(child.visitCount > 0 && this.visitCount > 0) {
+        bound = child.meanValue - (explorationBias * this.sqrtLogVisits * child.inverseSqrtVisits);
+      }
+
+      if(bound > bestBound) {
+        bestBound = bound;
+        bestChild = child;
+      }
+    }
+
+    return bestChild;
   }
 
   getStats(depth = 0): SearchNodeStats<TMove, TTeam> {
@@ -621,19 +665,7 @@ export class MCTS<
       return null;
     }
 
-    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
-    let bestBound = Number.NEGATIVE_INFINITY;
-
-    for(const childView of nodeRef.children.values()) {
-      const child = asTreeNode(childView)!;
-      const bound = child.lowerConfidenceBound(explorationBias);
-      if(bound > bestBound) {
-        bestBound = bound;
-        bestChild = child;
-      }
-    }
-
-    return bestChild;
+    return nodeRef.selectSecureChild(explorationBias);
   }
 
   getBestChild(
@@ -645,19 +677,7 @@ export class MCTS<
       return null;
     }
 
-    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    for(const childView of nodeRef.children.values()) {
-      const child = asTreeNode(childView)!;
-      const score = child.calcScore(explorationBias);
-      if(score > bestScore) {
-        bestScore = score;
-        bestChild = child;
-      }
-    }
-
-    return bestChild;
+    return nodeRef.selectBestChild(explorationBias);
   }
 
   getFinalChild(
@@ -734,7 +754,7 @@ export class MCTS<
         };
       }
 
-      const bestChild = this.getBestChild(currentNode);
+      const bestChild = currentNode.selectBestChild(this.explorationBias);
       if(!bestChild) {
         throw new Error('Fully-expanded node has no children.');
       }
@@ -828,10 +848,25 @@ export class MCTS<
     rewards: ReadonlyMap<TTeam, number>,
   ) {
     let currentNode: TreeNode<TState, TMove, TTeam> | null = node;
+    const parentTeamValueCache = new Map<TTeam, number>();
+    const rewardPairs = [...rewards.entries()];
 
     while(currentNode) {
-      currentNode.visit(rewards, this.evaluateTeamValue);
-      currentNode = asTreeNode(currentNode.parent);
+      const parentNode = currentNode.getParentNode();
+      const parentTeam = parentNode?.team ?? null;
+      let parentTeamValue: number | null = null;
+
+      if(parentTeam !== null) {
+        if(parentTeamValueCache.has(parentTeam)) {
+          parentTeamValue = parentTeamValueCache.get(parentTeam) ?? null;
+        } else {
+          parentTeamValue = this.evaluateTeamValue(parentTeam, rewards);
+          parentTeamValueCache.set(parentTeam, parentTeamValue);
+        }
+      }
+
+      currentNode.visit(rewardPairs, parentTeamValue);
+      currentNode = parentNode;
     }
   }
 

@@ -47,7 +47,7 @@ export class OthelloState extends GameState {
     const moves = [];
 
     for(let index = 0; index < TOTAL_CELLS; index += 1) {
-      if(this.getFlips(index, this.team).length > 0) {
+      if(this.isLegalMove(index, this.team)) {
         moves.push(String(index));
       }
     }
@@ -66,18 +66,15 @@ export class OthelloState extends GameState {
 
     let legalCount = 0;
     let chosenIndex = null;
-    let chosenFlips = null;
 
     for(let index = 0; index < TOTAL_CELLS; index += 1) {
-      const flips = this.getFlips(index, this.team);
-      if(flips.length === 0) {
+      if(!this.isLegalMove(index, this.team)) {
         continue;
       }
 
       legalCount += 1;
       if(Math.floor(random() * legalCount) === 0) {
         chosenIndex = index;
-        chosenFlips = flips;
       }
     }
 
@@ -94,6 +91,7 @@ export class OthelloState extends GameState {
 
     const nextBoard = [...this.board];
     nextBoard[chosenIndex] = this.team;
+    const chosenFlips = this.getFlips(chosenIndex, this.team);
 
     for(const flipIndex of chosenFlips) {
       nextBoard[flipIndex] = this.team;
@@ -114,7 +112,7 @@ export class OthelloState extends GameState {
     let chosenIndex = null;
 
     for(let index = 0; index < TOTAL_CELLS; index += 1) {
-      if(this.getFlips(index, this.team).length === 0) {
+      if(!this.isLegalMove(index, this.team)) {
         continue;
       }
 
@@ -226,7 +224,7 @@ export class OthelloState extends GameState {
     const moves = [];
 
     for(let index = 0; index < TOTAL_CELLS; index += 1) {
-      if(this.getFlips(index, team).length > 0) {
+      if(this.isLegalMove(index, team)) {
         moves.push(index);
       }
     }
@@ -236,8 +234,44 @@ export class OthelloState extends GameState {
 
   hasAnyLegalMoveForTeam(team) {
     for(let index = 0; index < TOTAL_CELLS; index += 1) {
-      if(this.getFlips(index, team).length > 0) {
+      if(this.isLegalMove(index, team)) {
         return true;
+      }
+    }
+
+    return false;
+  }
+
+  isLegalMove(index, team) {
+    if(index < 0 || index >= TOTAL_CELLS || this.board[index] !== null) {
+      return false;
+    }
+
+    const row = Math.floor(index / COLS);
+    const col = index % COLS;
+    const opponent = !team;
+
+    for(const [rowDelta, colDelta] of DIRECTIONS) {
+      let nextRow = row + rowDelta;
+      let nextCol = col + colDelta;
+      let seenOpponent = false;
+
+      while(nextRow >= 0 && nextRow < ROWS && nextCol >= 0 && nextCol < COLS) {
+        const nextIndex = this.getIndex(nextRow, nextCol);
+        const cell = this.board[nextIndex];
+
+        if(cell === opponent) {
+          seenOpponent = true;
+          nextRow += rowDelta;
+          nextCol += colDelta;
+          continue;
+        }
+
+        if(cell === team && seenOpponent) {
+          return true;
+        }
+
+        break;
       }
     }
 

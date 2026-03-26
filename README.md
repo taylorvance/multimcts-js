@@ -106,6 +106,12 @@ Search profiling against built code:
 npm run profile:search -- --iterations 10000 --samples 12 --instrument-state
 ```
 
+Add engine-phase timing on top of state-method timing when you want to see where selection, expansion, simulation, and backprop are spending time:
+
+```bash
+npm run profile:search -- --scenario tictactoe-midgame --instrument-state --instrument-engine
+```
+
 Built-in scenarios currently include:
 
 - `tictactoe-midgame`

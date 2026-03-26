@@ -7,6 +7,7 @@ const DEFAULT_OPTIONS = {
   diagnostics: false,
   explorationBias: Math.SQRT2,
   finalActionStrategy: 'robustChild',
+  instrumentEngine: false,
   instrumentState: false,
   iterations: undefined,
   json: false,
@@ -61,6 +62,11 @@ const parseOptions = (rawArgs) => {
 
     if(arg === '--instrument-state') {
       options.instrumentState = true;
+      continue;
+    }
+
+    if(arg === '--instrument-engine') {
+      options.instrumentEngine = true;
       continue;
     }
 
@@ -175,18 +181,26 @@ const createMethodStats = () => ({
   toString: { calls: 0, totalMs: 0 },
 });
 
-const instrumentStatePrototype = (state) => {
-  const prototype = Object.getPrototypeOf(state);
-  const methodStats = createMethodStats();
+const createEngineMethodStats = () => ({
+  backpropagate: { calls: 0, totalMs: 0 },
+  executeRound: { calls: 0, totalMs: 0 },
+  expand: { calls: 0, totalMs: 0 },
+  getBestChild: { calls: 0, totalMs: 0 },
+  search: { calls: 0, totalMs: 0 },
+  select: { calls: 0, totalMs: 0 },
+  simulate: { calls: 0, totalMs: 0 },
+});
+
+const instrumentObjectMethods = (target, methodStats) => {
   const restoreCallbacks = [];
 
   for(const methodName of Object.keys(methodStats)) {
-    const originalMethod = prototype[methodName];
+    const originalMethod = target[methodName];
     if(typeof originalMethod !== 'function') {
       continue;
     }
 
-    prototype[methodName] = function instrumentedMethod(...args) {
+    target[methodName] = function instrumentedMethod(...args) {
       const start = performance.now();
       try {
         return originalMethod.apply(this, args);
@@ -197,16 +211,28 @@ const instrumentStatePrototype = (state) => {
     };
 
     restoreCallbacks.push(() => {
-      prototype[methodName] = originalMethod;
+      target[methodName] = originalMethod;
     });
   }
 
   return {
-    methodStats,
     restore() {
       for(const restoreCallback of restoreCallbacks) {
         restoreCallback();
       }
+    },
+  };
+};
+
+const instrumentStatePrototype = (state) => {
+  const prototype = Object.getPrototypeOf(state);
+  const methodStats = createMethodStats();
+  const instrumentation = instrumentObjectMethods(prototype, methodStats);
+
+  return {
+    methodStats,
+    restore() {
+      instrumentation.restore();
     },
   };
 };
@@ -225,7 +251,7 @@ const getMemorySnapshot = () => {
 
 const bytesToMb = (value) => Number((value / (1024 * 1024)).toFixed(3));
 
-const sampleSearch = (scenario, options, sampleIndex) => {
+const sampleSearch = (scenario, options, sampleIndex, engineMethodStats = null) => {
   const state = scenario.createState();
   const random = createSeededRandom(options.seed + sampleIndex);
   const mcts = new MCTS({
@@ -234,12 +260,22 @@ const sampleSearch = (scenario, options, sampleIndex) => {
     random,
     teamValueStrategy: options.teamValueStrategy,
   });
+  const engineInstrumentation = options.instrumentEngine && engineMethodStats
+    ? instrumentObjectMethods(mcts, engineMethodStats)
+    : null;
 
-  const startWall = performance.now();
-  const result = options.diagnostics
-    ? mcts.searchWithDiagnostics(state, { maxIterations: options.iterations })
-    : mcts.search(state, { maxIterations: options.iterations });
-  const elapsedMs = performance.now() - startWall;
+  let result;
+  let elapsedMs;
+
+  try {
+    const startWall = performance.now();
+    result = options.diagnostics
+      ? mcts.searchWithDiagnostics(state, { maxIterations: options.iterations })
+      : mcts.search(state, { maxIterations: options.iterations });
+    elapsedMs = performance.now() - startWall;
+  } finally {
+    engineInstrumentation?.restore();
+  }
 
   return {
     elapsedMs,
@@ -345,6 +381,13 @@ const formatResult = (summary) => {
     }
   }
 
+  if(summary.engineMethodStats.length > 0) {
+    lines.push('Top engine methods (inclusive):');
+    for(const stat of summary.engineMethodStats) {
+      lines.push(`  ${stat.name}: calls=${stat.calls} totalMs=${stat.totalMs} avgUs=${stat.averageUs} sharePct=${stat.sharePct}`);
+    }
+  }
+
   return lines.join('\n');
 };
 
@@ -366,6 +409,9 @@ const main = async () => {
   const instrumentation = options.instrumentState
     ? instrumentStatePrototype(sampleState)
     : null;
+  const engineMethodStats = options.instrumentEngine
+    ? createEngineMethodStats()
+    : null;
 
   const startMemory = getMemorySnapshot();
   const cpuStart = process.cpuUsage();
@@ -376,7 +422,12 @@ const main = async () => {
 
   try {
     for(let sampleIndex = 0; sampleIndex < options.samples; sampleIndex += 1) {
-      const sample = sampleSearch(scenario, options, sampleIndex + options.warmup);
+      const sample = sampleSearch(
+        scenario,
+        options,
+        sampleIndex + options.warmup,
+        engineMethodStats,
+      );
       elapsedSamplesMs.push(sample.elapsedMs);
       completedSamples.push(sample);
       lastSample = sample;
@@ -405,6 +456,7 @@ const main = async () => {
       diagnostics: options.diagnostics,
       explorationBias: options.explorationBias,
       finalActionStrategy: options.finalActionStrategy,
+      instrumentEngine: options.instrumentEngine,
       iterations: options.iterations,
       samples: options.samples,
       teamValueStrategy: options.teamValueStrategy,
@@ -446,6 +498,9 @@ const main = async () => {
     },
     methodStats: instrumentation
       ? summarizeMethodStats(instrumentation.methodStats, totalMs)
+      : [],
+    engineMethodStats: engineMethodStats
+      ? summarizeMethodStats(engineMethodStats, totalMs)
       : [],
     scenario: {
       label: scenario.label,
