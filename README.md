@@ -8,7 +8,7 @@ Root exports:
 
 - `GameState`
 - `MCTS`
-- `SearchNode`
+- `type SearchNodeView`
 - `type FinalActionStrategy`
 - `type RewardInput`
 - `type RolloutSuggestion`
@@ -34,7 +34,7 @@ Explicit subpaths:
 ## Core Concepts
 
 - Typed `GameState<TMove, TTeam, TState>` base class
-- Structured `search()` results with metrics and tree access
+- Structured `search()` results with metrics and read-only tree access
 - Tree reuse through `advanceToChild()`
 - `Map`-based move and reward storage
 - Configurable team-value scalarization with built-in or custom evaluators

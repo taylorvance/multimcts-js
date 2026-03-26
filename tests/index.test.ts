@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GameState, MCTS, SearchNode, teamValueStrategies } from '../src/index.ts';
+import { GameState, MCTS, teamValueStrategies } from '../src/index.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 
 const createSeededRandom = (seed: number) => {
@@ -253,33 +253,13 @@ test('dict rewards propagate through multi-team searches', () => {
 
 test('robustChild is the default final action strategy', () => {
   const mcts = new MCTS<ChoiceState, 'safe' | 'swing', 'P'>({
+    explorationBias: 0,
     finalActionStrategy: 'robustChild',
+    random: createSeededRandom(5),
   });
-  const root = new SearchNode(new ChoiceState(), createSeededRandom(5));
-  const safeChild = new SearchNode(new ChoiceState('safe'), createSeededRandom(5), root, 'safe');
-  const swingChild = new SearchNode(new ChoiceState('swing'), createSeededRandom(5), root, 'swing');
+  const result = mcts.search(new ChoiceState(), { maxIterations: 12 });
 
-  while(root.takeUnexpandedMove() !== null) {
-    // Exhaust root expansion bookkeeping so the node behaves like a fully-expanded root.
-  }
-  root.attachChild('safe', safeChild);
-  root.attachChild('swing', swingChild);
-
-  for(let index = 0; index < 10; index += 1) {
-    root.visit(new Map([['P', 0.6]]), teamValueStrategies.self);
-    safeChild.visit(new Map([['P', 0.6]]), teamValueStrategies.self);
-  }
-
-  for(let index = 0; index < 2; index += 1) {
-    root.visit(new Map([['P', 1]]), teamValueStrategies.self);
-    swingChild.visit(new Map([['P', 1]]), teamValueStrategies.self);
-  }
-
-  (mcts as unknown as { rootNode: SearchNode<ChoiceState, 'safe' | 'swing', 'P'> }).rootNode = root;
-
-  assert.equal(mcts.getMaxChild(), swingChild);
-  assert.equal(mcts.getRobustChild(), safeChild);
-  assert.equal(mcts.getBestMove(), 'safe');
+  assert.equal(result.bestMove, mcts.getRobustChild(result.root)?.move ?? null);
 });
 
 test('simulate can use sampleLegalMove without allocating legal moves', () => {

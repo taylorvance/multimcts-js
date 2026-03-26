@@ -35,7 +35,7 @@ const exampleModule = await import(pathToFileURL(path.join(repoRoot, 'dist/examp
 
 assert.equal(typeof runtimeModule.GameState, 'function');
 assert.equal(typeof runtimeModule.MCTS, 'function');
-assert.equal(typeof runtimeModule.SearchNode, 'function');
+assert.equal(typeof runtimeModule.teamValueStrategies, 'object');
 assert.equal(typeof exampleModule.TicTacToeState, 'function');
 
 const searchState = new exampleModule.TicTacToeState();

@@ -56,11 +56,24 @@ export interface SearchNodeStats<TMove, TTeam> {
   visits: number;
 }
 
+export interface SearchNodeView<TState, TMove, TTeam> {
+  readonly averageValue: number;
+  readonly children: ReadonlyMap<TMove, SearchNodeView<TState, TMove, TTeam>>;
+  readonly isFullyExpanded: boolean;
+  readonly isTerminal: boolean;
+  readonly move: TMove | null;
+  readonly parent: SearchNodeView<TState, TMove, TTeam> | null;
+  readonly state: TState;
+  readonly team: TTeam;
+  readonly utilitySums: ReadonlyMap<TTeam, number>;
+  readonly visits: number;
+}
+
 export interface SearchResult<TState, TMove, TTeam> extends SearchMetrics {
-  bestChild: SearchNode<TState, TMove, TTeam> | null;
+  bestChild: SearchNodeView<TState, TMove, TTeam> | null;
   bestMove: TMove | null;
   diagnostics?: SearchDiagnostics;
-  root: SearchNode<TState, TMove, TTeam>;
+  root: SearchNodeView<TState, TMove, TTeam>;
 }
 
 export interface MCTSOptions<TState, TMove, TTeam> {
@@ -238,13 +251,17 @@ const stateToString = (state: unknown) => {
   return String(state);
 };
 
-export class SearchNode<TState, TMove, TTeam> {
+const asTreeNode = <TState, TMove, TTeam>(
+  node: SearchNodeView<TState, TMove, TTeam> | null,
+) => node as TreeNode<TState, TMove, TTeam> | null;
+
+class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TTeam> {
   private averageValueSum: number;
-  private readonly childNodes: Map<TMove, SearchNode<TState, TMove, TTeam>>;
+  private readonly childNodes: Map<TMove, TreeNode<TState, TMove, TTeam>>;
   private fullyExpanded: boolean;
   readonly isTerminal: boolean;
   readonly move: TMove | null;
-  private parentNode: SearchNode<TState, TMove, TTeam> | null;
+  private parentNode: TreeNode<TState, TMove, TTeam> | null;
   private readonly remainingMoves: TMove[];
   private readonly utilitySumsMap: Map<TTeam, number>;
   readonly state: TState;
@@ -261,7 +278,7 @@ export class SearchNode<TState, TMove, TTeam> {
       isTerminal(): boolean;
     },
     random: () => number,
-    parent: SearchNode<TState, TMove, TTeam> | null = null,
+    parent: TreeNode<TState, TMove, TTeam> | null = null,
     move: TMove | null = null,
   ) {
     this.state = state;
@@ -290,7 +307,7 @@ export class SearchNode<TState, TMove, TTeam> {
     this.team = state.getCurrentTeam();
   }
 
-  get children(): ReadonlyMap<TMove, SearchNode<TState, TMove, TTeam>> {
+  get children(): ReadonlyMap<TMove, SearchNodeView<TState, TMove, TTeam>> {
     return this.childNodes;
   }
 
@@ -298,7 +315,7 @@ export class SearchNode<TState, TMove, TTeam> {
     return this.fullyExpanded;
   }
 
-  get parent() {
+  get parent(): SearchNodeView<TState, TMove, TTeam> | null {
     return this.parentNode;
   }
 
@@ -336,7 +353,7 @@ export class SearchNode<TState, TMove, TTeam> {
     this.parentNode = null;
   }
 
-  attachChild(move: TMove, child: SearchNode<TState, TMove, TTeam>) {
+  attachChild(move: TMove, child: TreeNode<TState, TMove, TTeam>) {
     this.childNodes.set(move, child);
   }
 
@@ -403,12 +420,12 @@ export class SearchNode<TState, TMove, TTeam> {
 }
 
 const finalizeSearchDiagnostics = <TState, TMove, TTeam>(
-  root: SearchNode<TState, TMove, TTeam>,
+  root: TreeNode<TState, TMove, TTeam>,
   diagnostics: SearchDiagnostics,
 ) => {
   let retainedNodeCount = 0;
   let treeMaxDepth = 0;
-  const stack: Array<{ depth: number; node: SearchNode<TState, TMove, TTeam> }> = [
+  const stack: Array<{ depth: number; node: TreeNode<TState, TMove, TTeam> }> = [
     { depth: 0, node: root },
   ];
 
@@ -424,7 +441,7 @@ const finalizeSearchDiagnostics = <TState, TMove, TTeam>(
     }
 
     for(const child of current.node.children.values()) {
-      stack.push({ depth: current.depth + 1, node: child });
+      stack.push({ depth: current.depth + 1, node: asTreeNode(child)! });
     }
   }
 
@@ -440,7 +457,7 @@ export class MCTS<
   readonly evaluateTeamValue: TeamValueEvaluator<TTeam>;
   readonly explorationBias: number;
   readonly finalActionStrategy: FinalActionStrategy;
-  private rootNode: SearchNode<TState, TMove, TTeam> | null;
+  private rootNode: TreeNode<TState, TMove, TTeam> | null;
   private readonly now: () => number;
   private readonly random: () => number;
   private readonly stateKey: ((state: TState) => string) | undefined;
@@ -465,7 +482,7 @@ export class MCTS<
     this.rootNode = null;
   }
 
-  get root() {
+  get root(): SearchNodeView<TState, TMove, TTeam> | null {
     return this.rootNode;
   }
 
@@ -474,7 +491,7 @@ export class MCTS<
   }
 
   private initializeRoot(state: TState) {
-    this.rootNode = new SearchNode(state, this.random);
+    this.rootNode = new TreeNode(state, this.random);
     return this.rootNode;
   }
 
@@ -553,32 +570,35 @@ export class MCTS<
   }
 
   executeRound(
-    root: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
+    root: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode,
     diagnostics: SearchDiagnostics | null = null,
   ) {
-    if(!root) {
+    const rootNode = asTreeNode(root);
+    if(!rootNode) {
       throw new Error('Cannot execute a round without a root node.');
     }
 
-    const selection = this.select(root, diagnostics);
+    const selection = this.select(rootNode, diagnostics);
     const rewards = this.simulate(selection.node, diagnostics);
     this.backpropagate(selection.node, rewards);
   }
 
-  getMaxChild(node: SearchNode<TState, TMove, TTeam> | null = this.rootNode) {
+  getMaxChild(node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode) {
     return this.getBestChild(node, 0);
   }
 
-  getRobustChild(node: SearchNode<TState, TMove, TTeam> | null = this.rootNode) {
-    if(!node || node.children.size === 0) {
+  getRobustChild(node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode) {
+    const nodeRef = asTreeNode(node);
+    if(!nodeRef || nodeRef.children.size === 0) {
       return null;
     }
 
-    let bestChild: SearchNode<TState, TMove, TTeam> | null = null;
+    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
     let bestVisits = Number.NEGATIVE_INFINITY;
     let bestReward = Number.NEGATIVE_INFINITY;
 
-    for(const child of node.children.values()) {
+    for(const childView of nodeRef.children.values()) {
+      const child = asTreeNode(childView)!;
       if(
         child.visits > bestVisits
         || (child.visits === bestVisits && child.averageValue > bestReward)
@@ -593,17 +613,19 @@ export class MCTS<
   }
 
   getSecureChild(
-    node: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
+    node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode,
     explorationBias = this.explorationBias,
   ) {
-    if(!node || node.children.size === 0) {
+    const nodeRef = asTreeNode(node);
+    if(!nodeRef || nodeRef.children.size === 0) {
       return null;
     }
 
-    let bestChild: SearchNode<TState, TMove, TTeam> | null = null;
+    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
     let bestBound = Number.NEGATIVE_INFINITY;
 
-    for(const child of node.children.values()) {
+    for(const childView of nodeRef.children.values()) {
+      const child = asTreeNode(childView)!;
       const bound = child.lowerConfidenceBound(explorationBias);
       if(bound > bestBound) {
         bestBound = bound;
@@ -615,17 +637,19 @@ export class MCTS<
   }
 
   getBestChild(
-    node: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
+    node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode,
     explorationBias = this.explorationBias,
   ) {
-    if(!node || node.children.size === 0) {
+    const nodeRef = asTreeNode(node);
+    if(!nodeRef || nodeRef.children.size === 0) {
       return null;
     }
 
-    let bestChild: SearchNode<TState, TMove, TTeam> | null = null;
+    let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
     let bestScore = Number.NEGATIVE_INFINITY;
 
-    for(const child of node.children.values()) {
+    for(const childView of nodeRef.children.values()) {
+      const child = asTreeNode(childView)!;
       const score = child.calcScore(explorationBias);
       if(score > bestScore) {
         bestScore = score;
@@ -637,7 +661,7 @@ export class MCTS<
   }
 
   getFinalChild(
-    node: SearchNode<TState, TMove, TTeam> | null = this.rootNode,
+    node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode,
     strategy = this.finalActionStrategy,
   ) {
     switch(strategy) {
@@ -662,7 +686,7 @@ export class MCTS<
     }
   }
 
-  getBestMove(node: SearchNode<TState, TMove, TTeam> | null = this.rootNode) {
+  getBestMove(node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode) {
     return this.getFinalChild(node)?.move ?? null;
   }
 
@@ -671,7 +695,7 @@ export class MCTS<
       return null;
     }
 
-    const child = this.rootNode.children.get(move) ?? null;
+    const child = asTreeNode(this.rootNode.children.get(move) ?? null);
     if(!child) {
       return null;
     }
@@ -686,7 +710,7 @@ export class MCTS<
   }
 
   private select(
-    node: SearchNode<TState, TMove, TTeam>,
+    node: TreeNode<TState, TMove, TTeam>,
     diagnostics: SearchDiagnostics | null,
   ) {
     let currentNode = node;
@@ -733,7 +757,7 @@ export class MCTS<
   }
 
   private expand(
-    node: SearchNode<TState, TMove, TTeam>,
+    node: TreeNode<TState, TMove, TTeam>,
     diagnostics: SearchDiagnostics | null,
   ) {
     const move = node.takeUnexpandedMove();
@@ -742,7 +766,7 @@ export class MCTS<
     }
 
     const childState = node.state.makeMove(move);
-    const childNode = new SearchNode(childState, this.random, node, move);
+    const childNode = new TreeNode(childState, this.random, node, move);
     node.attachChild(move, childNode);
 
     if(diagnostics) {
@@ -754,7 +778,7 @@ export class MCTS<
   }
 
   private simulate(
-    node: SearchNode<TState, TMove, TTeam>,
+    node: TreeNode<TState, TMove, TTeam>,
     diagnostics: SearchDiagnostics | null,
   ) {
     if(node.isTerminal) {
@@ -800,14 +824,14 @@ export class MCTS<
   }
 
   private backpropagate(
-    node: SearchNode<TState, TMove, TTeam>,
+    node: TreeNode<TState, TMove, TTeam>,
     rewards: ReadonlyMap<TTeam, number>,
   ) {
-    let currentNode: SearchNode<TState, TMove, TTeam> | null = node;
+    let currentNode: TreeNode<TState, TMove, TTeam> | null = node;
 
     while(currentNode) {
       currentNode.visit(rewards, this.evaluateTeamValue);
-      currentNode = currentNode.parent;
+      currentNode = asTreeNode(currentNode.parent);
     }
   }
 
