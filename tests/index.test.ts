@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GameState, MCTS, teamValueStrategies } from '../src/index.ts';
+import { BreakthroughState, type BreakthroughCell } from '../src/games/breakthrough.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 import { HexState, playHexMoves } from '../src/games/hex.ts';
 
@@ -462,4 +463,22 @@ test('HexState opening exposes the expected number of legal moves', () => {
 
   assert.equal(state.getLegalMoves().length, 49);
   assert.equal(state.sampleLegalMove(createSeededRandom(37)) >= 0, true);
+});
+
+test('BreakthroughState opening exposes the expected legal moves', () => {
+  const state = new BreakthroughState();
+
+  assert.equal(state.getLegalMoves().length, 22);
+  assert.match(state.sampleLegalMove(createSeededRandom(41)), /^\d+:\d+$/);
+});
+
+test('BreakthroughState detects a home-rank win for W', () => {
+  const board = Array<BreakthroughCell>(64).fill(null);
+  board[9] = 'W';
+  board[54] = 'B';
+  const state = new BreakthroughState(board, true);
+  const terminalState = state.makeMove('9:0');
+
+  assert.equal(terminalState.isTerminal(), true);
+  assert.deepEqual(terminalState.getReward(), { W: 1, B: 0 });
 });

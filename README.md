@@ -23,6 +23,10 @@ Root exports:
 Explicit subpaths:
 
 - `multimcts/tictactoe`
+- `multimcts/breakthrough`
+- `multimcts/connect-four`
+- `multimcts/othello`
+- `multimcts/hex`
 
 ## Design Goals
 
@@ -40,7 +44,7 @@ Explicit subpaths:
 - Configurable team-value scalarization with built-in or custom evaluators
 - Configurable final move selection with `maxChild`, `robustChild`, `maxRobustChild`, or `secureChild`
 - Optional rollout hooks for heuristic playouts or low-allocation random move sampling
-- Reusable headless game modules for `Tic-Tac-Toe`, `Connect Four`, `Othello`, and `Hex`
+- Reusable headless game modules for `Tic-Tac-Toe`, `Connect Four`, `Othello`, `Hex`, and `Breakthrough`
 
 ## Engine Notes
 
@@ -64,6 +68,7 @@ console.log(result.bestMove);
 
 Additional reusable game modules are available via:
 
+- `multimcts/breakthrough`
 - `multimcts/connect-four`
 - `multimcts/othello`
 - `multimcts/hex`
@@ -121,12 +126,30 @@ npm run profile:search -- --scenario tictactoe-midgame --instrument-state --inst
 
 Built-in scenarios currently include:
 
+- `breakthrough-opening`
+- `breakthrough-midgame`
 - `tictactoe-midgame`
 - `connect-four-opening`
 - `connect-four-midgame`
 - `hex-opening`
 - `hex-midgame`
 - `othello-opening`
+
+## Benchmark Suite
+
+The benchmark pool is intentionally diverse rather than stacked with slight variations on the same alignment game.
+
+- `Tic-Tac-Toe` is the tiny correctness and engine-overhead probe. It is useful for catching regressions in the core search loop because game logic cost is very low.
+- `Connect Four` is the low-branching adversarial baseline. It represents games with cheap legality checks, tactical traps, and simple transitions.
+- `Breakthrough` is the race-and-capture benchmark. It represents forward-only tactical games where mobility, tempo, and capture pressure matter more than heavy rules logic.
+- `Othello` is the medium-complexity legality benchmark. It represents games where move generation and terminal checks are materially more expensive than the engine itself.
+- `Hex` is the connection-game benchmark. It represents path-connectivity win conditions and connection-focused search rather than capture-heavy or score-heavy play.
+
+For each benchmark game, prefer a small position set rather than only the initial state:
+
+- opening positions for baseline throughput and symmetry
+- midgames for realistic branching and tactical pressure
+- later tactical positions when the game has qualitatively different endgame behavior
 
 Use an external scenario module:
 

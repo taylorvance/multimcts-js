@@ -32,6 +32,11 @@
 			"types": "./dist/games/hex.d.ts",
 			"import": "./dist/games/hex.js",
 			"default": "./dist/games/hex.js"
+		},
+		"./breakthrough": {
+			"types": "./dist/games/breakthrough.d.ts",
+			"import": "./dist/games/breakthrough.js",
+			"default": "./dist/games/breakthrough.js"
 		}
 	},
 	"files": [

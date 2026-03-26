@@ -20,6 +20,8 @@ const DEFAULT_OPTIONS = {
 };
 
 const BUILTIN_SCENARIOS = {
+  'breakthrough-midgame': './scenarios/breakthrough-midgame.mjs',
+  'breakthrough-opening': './scenarios/breakthrough-opening.mjs',
   'connect-four-midgame': './scenarios/connect-four-midgame.mjs',
   'connect-four-opening': './scenarios/connect-four-opening.mjs',
   'hex-midgame': './scenarios/hex-midgame.mjs',

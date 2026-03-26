@@ -4,6 +4,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BUILTIN_SCENARIOS = {
+  'breakthrough-opening': './scenarios/breakthrough-opening.mjs',
+  'breakthrough-midgame': './scenarios/breakthrough-midgame.mjs',
   'connect-four-opening': './scenarios/connect-four-opening.mjs',
   'connect-four-midgame': './scenarios/connect-four-midgame.mjs',
   'hex-opening': './scenarios/hex-opening.mjs',
