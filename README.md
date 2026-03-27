@@ -16,9 +16,9 @@ Root exports:
 - `type SearchMetrics`
 - `type SearchNodeStats`
 - `type SearchResult`
- - `type TeamValueEvaluator`
- - `type TeamValueStrategyName`
- - `teamValueStrategies`
+- `type TeamValueEvaluator`
+- `type TeamValueStrategyName`
+- `teamValueStrategies`
 
 Explicit subpaths:
 
@@ -56,10 +56,10 @@ Explicit subpaths:
 ## Example
 
 ```ts
-import { MCTS } from 'multimcts';
-import { TicTacToeState } from 'multimcts/tictactoe';
+import { MCTS } from "multimcts";
+import { TicTacToeState } from "multimcts/tictactoe";
 
-const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>();
+const mcts = new MCTS<TicTacToeState, number, "X" | "O">();
 const state = new TicTacToeState();
 
 const result = mcts.search(state, { maxIterations: 1000 });
@@ -76,24 +76,24 @@ Additional reusable game modules are available via:
 Choosing a different final-action policy:
 
 ```ts
-const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
-  finalActionStrategy: 'maxChild',
+const mcts = new MCTS<TicTacToeState, number, "X" | "O">({
+  finalActionStrategy: "maxChild",
 });
 ```
 
 Choosing a different team-value policy:
 
 ```ts
-const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
-  teamValueStrategy: 'self',
+const mcts = new MCTS<TicTacToeState, number, "X" | "O">({
+  teamValueStrategy: "self",
 });
 ```
 
 Or provide a custom evaluator:
 
 ```ts
-const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
-  evaluateTeamValue: (team, rewards) => (rewards.get(team) ?? 0),
+const mcts = new MCTS<TicTacToeState, number, "X" | "O">({
+  evaluateTeamValue: (team, rewards) => rewards.get(team) ?? 0,
 });
 ```
 
@@ -235,7 +235,9 @@ npm run arena -- --engine-a . --engine-b /tmp/multimcts-old --scenario hex-openi
 
 This works because the current scenario module can supply the current game implementation while each engine build stays pinned to its own commit.
 
-Future design notes for deferred ideas such as player identity vs team identity live in [docs/future-design-notes.md](/Users/taylorvance/Library/Mobile%20Documents/com~apple~CloudDocs/dev/multimcts-js/docs/future-design-notes.md).
+Future design notes for deferred ideas live in [docs/future-design-notes.md](docs/future-design-notes.md).
+
+Project origin and historical context live in [docs/HISTORY.md](docs/HISTORY.md).
 
 For CPU and heap profiles without adding engine overhead:
 
