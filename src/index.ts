@@ -77,6 +77,8 @@ export interface SearchResult<TState, TMove, TTeam> extends SearchMetrics {
 }
 
 export interface MCTSOptions<TState, TMove, TTeam> {
+  explorationConstant?: number;
+  /** @deprecated Use explorationConstant instead. */
   explorationBias?: number;
   evaluateTeamValue?: TeamValueEvaluator<TTeam>;
   finalActionStrategy?: FinalActionStrategy;
@@ -255,6 +257,19 @@ const asTreeNode = <TState, TMove, TTeam>(
   node: SearchNodeView<TState, TMove, TTeam> | null,
 ) => node as TreeNode<TState, TMove, TTeam> | null;
 
+const resolveAliasedNumberOption = (
+  preferredValue: number | undefined,
+  deprecatedValue: number | undefined,
+  preferredLabel: string,
+  deprecatedLabel: string,
+) => {
+  if(preferredValue !== undefined && deprecatedValue !== undefined && preferredValue !== deprecatedValue) {
+    throw new Error(`${preferredLabel} and ${deprecatedLabel} cannot disagree when both are provided.`);
+  }
+
+  return preferredValue ?? deprecatedValue;
+};
+
 class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TTeam> {
   private averageValueSum: number;
   private readonly childNodes: Map<TMove, TreeNode<TState, TMove, TTeam>>;
@@ -374,15 +389,15 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
     return move;
   }
 
-  uncertainty(explorationBias: number) {
+  uncertainty(explorationConstant: number) {
     if(!this.parentNode || this.visitCount === 0 || this.parentNode.visitCount === 0) {
       return Number.POSITIVE_INFINITY;
     }
 
-    return explorationBias * this.parentNode.sqrtLogVisits * this.inverseSqrtVisits;
+    return explorationConstant * this.parentNode.sqrtLogVisits * this.inverseSqrtVisits;
   }
 
-  calcScore(explorationBias: number) {
+  calcScore(explorationConstant: number) {
     if(!this.parentNode) {
       return this.meanValue;
     }
@@ -391,18 +406,18 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
       return Number.POSITIVE_INFINITY;
     }
 
-    return this.meanValue + this.uncertainty(explorationBias);
+    return this.meanValue + this.uncertainty(explorationConstant);
   }
 
-  lowerConfidenceBound(explorationBias: number) {
+  lowerConfidenceBound(explorationConstant: number) {
     if(!this.parentNode) {
       return this.meanValue;
     }
 
-    return this.meanValue - this.uncertainty(explorationBias);
+    return this.meanValue - this.uncertainty(explorationConstant);
   }
 
-  selectBestChild(explorationBias: number) {
+  selectBestChild(explorationConstant: number) {
     let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
     let bestScore = Number.NEGATIVE_INFINITY;
 
@@ -410,7 +425,7 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
       let score = Number.POSITIVE_INFINITY;
 
       if(child.visitCount > 0 && this.visitCount > 0) {
-        score = child.meanValue + (explorationBias * this.sqrtLogVisits * child.inverseSqrtVisits);
+        score = child.meanValue + (explorationConstant * this.sqrtLogVisits * child.inverseSqrtVisits);
       }
 
       if(score > bestScore) {
@@ -422,7 +437,7 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
     return bestChild;
   }
 
-  selectSecureChild(explorationBias: number) {
+  selectSecureChild(explorationConstant: number) {
     let bestChild: TreeNode<TState, TMove, TTeam> | null = null;
     let bestBound = Number.NEGATIVE_INFINITY;
 
@@ -430,7 +445,7 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
       let bound = Number.POSITIVE_INFINITY;
 
       if(child.visitCount > 0 && this.visitCount > 0) {
-        bound = child.meanValue - (explorationBias * this.sqrtLogVisits * child.inverseSqrtVisits);
+        bound = child.meanValue - (explorationConstant * this.sqrtLogVisits * child.inverseSqrtVisits);
       }
 
       if(bound > bestBound) {
@@ -499,7 +514,7 @@ export class MCTS<
   TTeam = string,
 > {
   readonly evaluateTeamValue: TeamValueEvaluator<TTeam>;
-  readonly explorationBias: number;
+  readonly explorationConstant: number;
   readonly finalActionStrategy: FinalActionStrategy;
   private rootNode: TreeNode<TState, TMove, TTeam> | null;
   private readonly now: () => number;
@@ -508,15 +523,20 @@ export class MCTS<
 
   constructor(options: number | MCTSOptions<TState, TMove, TTeam> = {}) {
     const resolvedOptions = typeof options === 'number'
-      ? { explorationBias: options }
+      ? { explorationConstant: options }
       : options;
 
-    const explorationBias = resolvedOptions.explorationBias ?? Math.SQRT2;
-    if(!Number.isFinite(explorationBias) || explorationBias < 0) {
-      throw new Error('explorationBias must be a non-negative number.');
+    const explorationConstant = resolveAliasedNumberOption(
+      resolvedOptions.explorationConstant,
+      resolvedOptions.explorationBias,
+      'explorationConstant',
+      'explorationBias',
+    ) ?? Math.SQRT2;
+    if(!Number.isFinite(explorationConstant) || explorationConstant < 0) {
+      throw new Error('explorationConstant must be a non-negative number.');
     }
 
-    this.explorationBias = explorationBias;
+    this.explorationConstant = explorationConstant;
     this.finalActionStrategy = resolvedOptions.finalActionStrategy ?? 'robustChild';
     this.evaluateTeamValue = resolvedOptions.evaluateTeamValue
       ?? teamValueStrategies[resolvedOptions.teamValueStrategy ?? 'margin'];
@@ -524,6 +544,10 @@ export class MCTS<
     this.now = resolvedOptions.now ?? (() => performance.now());
     this.stateKey = resolvedOptions.stateKey;
     this.rootNode = null;
+  }
+
+  get explorationBias() {
+    return this.explorationConstant;
   }
 
   get root(): SearchNodeView<TState, TMove, TTeam> | null {
@@ -658,26 +682,26 @@ export class MCTS<
 
   getSecureChild(
     node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode,
-    explorationBias = this.explorationBias,
+    explorationConstant = this.explorationConstant,
   ) {
     const nodeRef = asTreeNode(node);
     if(!nodeRef || nodeRef.children.size === 0) {
       return null;
     }
 
-    return nodeRef.selectSecureChild(explorationBias);
+    return nodeRef.selectSecureChild(explorationConstant);
   }
 
   getBestChild(
     node: SearchNodeView<TState, TMove, TTeam> | null = this.rootNode,
-    explorationBias = this.explorationBias,
+    explorationConstant = this.explorationConstant,
   ) {
     const nodeRef = asTreeNode(node);
     if(!nodeRef || nodeRef.children.size === 0) {
       return null;
     }
 
-    return nodeRef.selectBestChild(explorationBias);
+    return nodeRef.selectBestChild(explorationConstant);
   }
 
   getFinalChild(
@@ -754,7 +778,7 @@ export class MCTS<
         };
       }
 
-      const bestChild = currentNode.selectBestChild(this.explorationBias);
+      const bestChild = currentNode.selectBestChild(this.explorationConstant);
       if(!bestChild) {
         throw new Error('Fully-expanded node has no children.');
       }
@@ -848,7 +872,7 @@ export class MCTS<
     rewards: ReadonlyMap<TTeam, number>,
   ) {
     let currentNode: TreeNode<TState, TMove, TTeam> | null = node;
-    const parentTeamValueCache = new Map<TTeam, number>();
+    const teamValueCache = new Map<TTeam, number>();
     const rewardPairs = [...rewards.entries()];
 
     while(currentNode) {
@@ -857,11 +881,11 @@ export class MCTS<
       let parentTeamValue: number | null = null;
 
       if(parentTeam !== null) {
-        if(parentTeamValueCache.has(parentTeam)) {
-          parentTeamValue = parentTeamValueCache.get(parentTeam) ?? null;
+        if(teamValueCache.has(parentTeam)) {
+          parentTeamValue = teamValueCache.get(parentTeam) ?? null;
         } else {
           parentTeamValue = this.evaluateTeamValue(parentTeam, rewards);
-          parentTeamValueCache.set(parentTeam, parentTeamValue);
+          teamValueCache.set(parentTeam, parentTeamValue);
         }
       }
 

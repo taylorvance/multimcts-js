@@ -1,11 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
-import { MCTS } from '../dist/index.js';
+
+let MCTS;
 
 const DEFAULT_OPTIONS = {
   diagnostics: false,
-  explorationBias: Math.SQRT2,
+  explorationConstant: Math.SQRT2,
   finalActionStrategy: 'robustChild',
   instrumentEngine: false,
   instrumentState: false,
@@ -49,16 +50,16 @@ const parseNonNegativeInt = (value, flagName) => {
   return parsed;
 };
 
-const parsePositiveNumber = (value, flagName) => {
+const parseNonNegativeNumber = (value, flagName) => {
   const parsed = Number.parseFloat(value);
-  if(!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${flagName} must be a positive number.`);
+  if(!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${flagName} must be a non-negative number.`);
   }
 
   return parsed;
 };
 
-const parseOptions = (rawArgs) => {
+export const parseOptions = (rawArgs) => {
   const options = { ...DEFAULT_OPTIONS };
 
   for(let index = 0; index < rawArgs.length; index += 1) {
@@ -90,8 +91,9 @@ const parseOptions = (rawArgs) => {
     }
 
     switch(arg) {
+      case '--exploration-constant':
       case '--exploration-bias':
-        options.explorationBias = parsePositiveNumber(nextValue, '--exploration-bias');
+        options.explorationConstant = parseNonNegativeNumber(nextValue, arg);
         index += 1;
         break;
       case '--final-action-strategy':
@@ -259,7 +261,7 @@ const sampleSearch = (scenario, options, sampleIndex, engineMethodStats = null) 
   const state = scenario.createState();
   const random = createSeededRandom(options.seed + sampleIndex);
   const mcts = new MCTS({
-    explorationBias: options.explorationBias,
+    explorationConstant: options.explorationConstant,
     finalActionStrategy: options.finalActionStrategy,
     random,
     teamValueStrategy: options.teamValueStrategy,
@@ -362,7 +364,7 @@ const formatResult = (summary) => {
     `Iterations/sample: ${summary.config.iterations}`,
     `Samples: ${summary.config.samples}`,
     `Warmup: ${summary.config.warmup}`,
-    `Exploration bias: ${summary.config.explorationBias}`,
+    `Exploration constant: ${summary.config.explorationConstant}`,
     `Team value strategy: ${summary.config.teamValueStrategy}`,
     `Wall ms: avg=${summary.timing.averageMs} min=${summary.timing.minMs} max=${summary.timing.maxMs} total=${summary.timing.totalMs}`,
     `Rounds/sec: ${summary.timing.roundsPerSecond}`,
@@ -396,12 +398,13 @@ const formatResult = (summary) => {
 };
 
 const formatProfileRerunTarget = (options) => (
-  options.modulePath
+  `${options.modulePath
     ? `--module ${JSON.stringify(options.modulePath)}`
-    : `--scenario ${options.scenario}`
+    : `--scenario ${options.scenario}`}`
 );
 
 const main = async () => {
+  ({ MCTS } = await import('../dist/index.js'));
   const rawOptions = parseOptions(process.argv.slice(2));
   const scenario = await loadScenario(rawOptions);
   const options = {
@@ -464,7 +467,7 @@ const main = async () => {
   const summary = {
     config: {
       diagnostics: options.diagnostics,
-      explorationBias: options.explorationBias,
+      explorationConstant: options.explorationConstant,
       finalActionStrategy: options.finalActionStrategy,
       instrumentEngine: options.instrumentEngine,
       iterations: options.iterations,
@@ -538,4 +541,6 @@ const main = async () => {
   console.log(`node --heap-prof --experimental-strip-types scripts/profile-search.mjs ${rerunTarget} --iterations ${options.iterations}`);
 };
 
-await main();
+if(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

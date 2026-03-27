@@ -173,12 +173,12 @@ const main = async () => {
       alternateSeats: options.alternateSeats,
       createAgents: (gameIndex) => ({
         A: createDirectArenaAgent(engineA, {
-          explorationBias: options.explorationBiasA,
+          explorationConstant: options.explorationConstantA,
           finalActionStrategy: options.finalActionStrategyA,
           teamValueStrategy: options.teamValueStrategyA,
         }, options.seed + (gameIndex * 2)),
         B: createDirectArenaAgent(engineB, {
-          explorationBias: options.explorationBiasB,
+          explorationConstant: options.explorationConstantB,
           finalActionStrategy: options.finalActionStrategyB,
           teamValueStrategy: options.teamValueStrategyB,
         }, options.seed + (gameIndex * 2) + 1),
@@ -186,14 +186,14 @@ const main = async () => {
       createInitialState: scenario.createInitialState,
       engineMetadata: {
         A: {
-          explorationBias: options.explorationBiasA,
+          explorationConstant: options.explorationConstantA,
           finalActionStrategy: options.finalActionStrategyA,
           modulePath: engineA.modulePath,
           ref: baselineRef,
           teamValueStrategy: options.teamValueStrategyA,
         },
         B: {
-          explorationBias: options.explorationBiasB,
+          explorationConstant: options.explorationConstantB,
           finalActionStrategy: options.finalActionStrategyB,
           modulePath: engineB.modulePath,
           ref: candidateRef,

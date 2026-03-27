@@ -17,8 +17,8 @@ export const DEFAULT_ARENA_OPTIONS = {
   alternateSeats: true,
   engineA: '.',
   engineB: '.',
-  explorationBiasA: Math.SQRT2,
-  explorationBiasB: Math.SQRT2,
+  explorationConstantA: Math.SQRT2,
+  explorationConstantB: Math.SQRT2,
   finalActionStrategyA: 'robustChild',
   finalActionStrategyB: 'robustChild',
   games: undefined,
@@ -50,10 +50,10 @@ export const parseNonNegativeInt = (value, flagName) => {
   return parsed;
 };
 
-export const parsePositiveNumber = (value, flagName) => {
+export const parseNonNegativeNumber = (value, flagName) => {
   const parsed = Number.parseFloat(value);
-  if(!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${flagName} must be a positive number.`);
+  if(!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${flagName} must be a non-negative number.`);
   }
 
   return parsed;
@@ -89,12 +89,14 @@ export const parseArenaOptions = (rawArgs) => {
         options.engineB = nextValue;
         index += 1;
         break;
+      case '--exploration-constant-a':
       case '--exploration-bias-a':
-        options.explorationBiasA = parsePositiveNumber(nextValue, '--exploration-bias-a');
+        options.explorationConstantA = parseNonNegativeNumber(nextValue, arg);
         index += 1;
         break;
+      case '--exploration-constant-b':
       case '--exploration-bias-b':
-        options.explorationBiasB = parsePositiveNumber(nextValue, '--exploration-bias-b');
+        options.explorationConstantB = parseNonNegativeNumber(nextValue, arg);
         index += 1;
         break;
       case '--final-action-strategy-a':
@@ -276,7 +278,7 @@ export class DirectArenaAgent {
 export const createDirectArenaAgent = (engineModule, options, seed) => new DirectArenaAgent(
   engineModule.MCTS,
   {
-    explorationBias: options.explorationBias,
+    explorationConstant: options.explorationConstant,
     finalActionStrategy: options.finalActionStrategy,
     random: createSeededRandom(seed),
     teamValueStrategy: options.teamValueStrategy,
@@ -470,6 +472,10 @@ export const printArenaSummary = (summary) => {
   console.log(`Engine B: ${summary.engines.B.modulePath}`);
   console.log(`Games: ${summary.config.games}`);
   console.log(`Iterations: A=${summary.config.iterationsA} B=${summary.config.iterationsB}`);
+  console.log(
+    `Exploration constant: A=${summary.engines.A.explorationConstant} `
+    + `B=${summary.engines.B.explorationConstant}`,
+  );
   console.log(
     `Team value strategies: A=${summary.engines.A.teamValueStrategy} `
     + `B=${summary.engines.B.teamValueStrategy}`,

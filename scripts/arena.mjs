@@ -31,30 +31,30 @@ const main = async () => {
     alternateSeats: options.alternateSeats,
     createAgents: (gameIndex) => ({
       A: createDirectArenaAgent(engineA, {
-        explorationBias: options.explorationBiasA,
+        explorationConstant: options.explorationConstantA,
         finalActionStrategy: options.finalActionStrategyA,
         teamValueStrategy: options.teamValueStrategyA,
       }, options.seed + (gameIndex * 2)),
       B: createDirectArenaAgent(engineB, {
-        explorationBias: options.explorationBiasB,
+        explorationConstant: options.explorationConstantB,
         finalActionStrategy: options.finalActionStrategyB,
         teamValueStrategy: options.teamValueStrategyB,
       }, options.seed + (gameIndex * 2) + 1),
     }),
     createInitialState: scenario.createInitialState,
     engineMetadata: {
-      A: {
-        explorationBias: options.explorationBiasA,
-        finalActionStrategy: options.finalActionStrategyA,
-        modulePath: engineA.modulePath,
-        teamValueStrategy: options.teamValueStrategyA,
-      },
-      B: {
-        explorationBias: options.explorationBiasB,
-        finalActionStrategy: options.finalActionStrategyB,
-        modulePath: engineB.modulePath,
-        teamValueStrategy: options.teamValueStrategyB,
-      },
+        A: {
+          explorationConstant: options.explorationConstantA,
+          finalActionStrategy: options.finalActionStrategyA,
+          modulePath: engineA.modulePath,
+          teamValueStrategy: options.teamValueStrategyA,
+        },
+        B: {
+          explorationConstant: options.explorationConstantB,
+          finalActionStrategy: options.finalActionStrategyB,
+          modulePath: engineB.modulePath,
+          teamValueStrategy: options.teamValueStrategyB,
+        },
     },
     games: options.games,
     iterations: {

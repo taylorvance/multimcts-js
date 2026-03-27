@@ -50,6 +50,7 @@ Explicit subpaths:
 
 - The default final-action strategy is `robustChild`, which returns the most visited root child rather than the highest raw mean value.
 - The default team-value strategy is `margin`, which scores a team by `ownValue - sum(otherTeamValues)`.
+- Deprecated compatibility alias `explorationBias` is still accepted for now, but new code should prefer `explorationConstant`.
 - `suggestRollout(random)` is the strongest rollout hook when a game can cheaply produce both the chosen move and the successor state in one pass.
 - `sampleLegalMove()` defaults to random selection from `getLegalMoves()`, and can be overridden when a game can sample a rollout move faster without materializing the full move list.
 
@@ -234,6 +235,8 @@ npm run compare:arena -- 7075f29 WORKTREE --scenario hex-opening --games 6 --ite
 The compare wrapper creates temporary worktrees, reuses the current checkout's `node_modules`, builds each ref, and then runs the shared arena core against those built engines. This works because the current scenario module can supply the current game implementation while each engine build stays pinned to its own commit.
 
 Future design notes for deferred ideas live in [docs/future-design-notes.md](docs/future-design-notes.md).
+
+Terminology and naming policy live in [docs/terminology.md](docs/terminology.md).
 
 Project origin and historical context live in [docs/HISTORY.md](docs/HISTORY.md).
 

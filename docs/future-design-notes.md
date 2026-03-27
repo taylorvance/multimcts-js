@@ -59,6 +59,30 @@ Recommended path:
 2. revisit generalized multiplayer arena support only after the repo has a canonical `>=3` player or team benchmark scenario
 3. design `N`-agent seat mapping and reporting around that real game rather than around hypothetical generic cases
 
+## Optimization Roadmap
+
+This is a pragmatic roadmap rather than a promise. Items are ordered by expected value and by how safely they fit the current engine architecture.
+
+### Near-Term Priorities
+
+1. improve rollout policies and low-allocation state fast paths in the bundled benchmark games when profiling shows state cost dominates engine cost
+2. consider optional transposition-aware tree reuse keyed by `stateKey()` for games where repeated states are common and hashing is reliable
+3. identify or add the next canonical benchmark positions that best expose engine-level regressions and wins
+
+### Mid-Term Candidates
+
+1. revisit optional RAVE only after it shows clear strength gains that justify core-engine complexity on the benchmark suite
+2. optional pruning constants only after there is evidence they help the canonical games without obscuring engine behavior
+3. progressive widening for games or variants where legal move counts are too large to expand eagerly
+4. heuristic value blending such as implicit minimax backups only if a concrete game provides a cheap, trustworthy heuristic signal
+5. concurrency-oriented techniques such as virtual loss only when the engine actually grows a parallel search mode
+
+### Why These Are Deferred
+
+- some techniques pay off only in specific branching-factor regimes or only with good heuristics
+- several of them introduce more semantic risk than plain throughput optimizations
+- the repo should prefer profile-backed improvements over adding fashionable MCTS features by default
+
 ## Historical MCTS Optimization Reference
 
 The original Hexachromix-specific optimization work is not in this repo.
@@ -91,19 +115,23 @@ The current engine in [src/index.ts](../src/index.ts) already carries forward so
 - multi-team reward storage and configurable scalarization
 - secure-child selection via a lower-confidence-bound style final action
 
-What it does not currently expose:
+What it still does not currently expose:
 
-- RAVE or other AMAF statistics
+- optional RAVE or AMAF statistics
+- selection-time or backprop-time AMAF move tracking
 - pruning during selection
-- rollout move-set collection for backpropagation-side statistics
+- public RAVE introspection on node views or node stats
 
-### Suggested Adoption Order
+### Suggested Next Steps
 
-If this repo revisits search optimizations, the lowest-risk order is:
+RAVE should stay deferred for now. The recent experiment increased engine complexity and did not yet show strong enough gains on the canonical benchmark set to justify landing it.
 
-1. add optional RAVE support behind a disabled-by-default engine option
-2. extend diagnostics and profiling so RAVE impact is measurable before tuning
-3. revisit pruning only after RAVE is working and benchmarked
+Recommended path before revisiting it:
+
+1. keep the committed engine on the simpler direct-value baseline
+2. continue testing RAVE or similar ideas in isolated branches until they show a clear strength win
+3. only then decide whether any public RAVE diagnostics belong in node views or exported stats
+4. revisit pruning only after a simpler optional optimization has clearly earned its keep
 
 ### Integration Risks To Keep In Mind
 

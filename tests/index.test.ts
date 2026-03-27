@@ -5,7 +5,9 @@ import { BreakthroughState, type BreakthroughCell } from '../src/games/breakthro
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 import { HexState, playHexMoves } from '../src/games/hex.ts';
 // @ts-expect-error arena helper is a runtime JS module without a declaration file.
-import { playArenaGame } from '../scripts/lib/arena-core.mjs';
+import { parseArenaOptions, playArenaGame } from '../scripts/lib/arena-core.mjs';
+// @ts-expect-error profile helper is a runtime JS module without a declaration file.
+import { parseOptions as parseProfileOptions } from '../scripts/profile-search.mjs';
 
 const createSeededRandom = (seed: number) => {
   let state = seed >>> 0;
@@ -302,6 +304,39 @@ test('search validates limits', () => {
   );
 });
 
+test('deprecated bias aliases remain supported for constants', () => {
+  const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+    explorationBias: 1.5,
+  });
+
+  assert.equal(mcts.explorationConstant, 1.5);
+  assert.equal(mcts.explorationBias, 1.5);
+});
+
+test('CLI parsers accept explicit zero for constant flags', () => {
+  const arenaOptions = parseArenaOptions([
+    '--exploration-constant-a', '0',
+    '--exploration-constant-b', '0',
+  ]);
+  const profileOptions = parseProfileOptions([
+    '--exploration-constant', '0',
+  ]);
+
+  assert.equal(arenaOptions.explorationConstantA, 0);
+  assert.equal(arenaOptions.explorationConstantB, 0);
+  assert.equal(profileOptions.explorationConstant, 0);
+});
+
+test('constructor rejects conflicting constant and bias aliases', () => {
+  assert.throws(
+    () => new MCTS<TicTacToeState, number, 'X' | 'O'>({
+      explorationBias: 1,
+      explorationConstant: 2,
+    }),
+    /explorationConstant and explorationBias cannot disagree/,
+  );
+});
+
 test('search rejects terminal roots', () => {
   const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>();
   const terminalState = new TicTacToeState([
@@ -382,7 +417,7 @@ test('dict rewards propagate through multi-team searches', () => {
 
 test('robustChild is the default final action strategy', () => {
   const mcts = new MCTS<ChoiceState, 'safe' | 'swing', 'P'>({
-    explorationBias: 0,
+    explorationConstant: 0,
     finalActionStrategy: 'robustChild',
     random: createSeededRandom(5),
   });
@@ -454,13 +489,13 @@ test('team value strategies are pure and produce expected scalar scores', () => 
 
 test('search can swap team value strategies without changing terminal reward shape', () => {
   const selfMcts = new MCTS<OutcomePreferenceState, 'balanced' | 'selfish', 'A' | 'B' | 'C'>({
-    explorationBias: 0,
+    explorationConstant: 0,
     finalActionStrategy: 'maxChild',
     random: createSeededRandom(21),
     teamValueStrategy: 'self',
   });
   const marginMcts = new MCTS<OutcomePreferenceState, 'balanced' | 'selfish', 'A' | 'B' | 'C'>({
-    explorationBias: 0,
+    explorationConstant: 0,
     finalActionStrategy: 'maxChild',
     random: createSeededRandom(21),
     teamValueStrategy: 'margin',
@@ -479,7 +514,7 @@ test('search can swap team value strategies without changing terminal reward sha
 test('custom team value evaluators can override the built-in strategy table', () => {
   const mcts = new MCTS<OutcomePreferenceState, 'balanced' | 'selfish', 'A' | 'B' | 'C'>({
     evaluateTeamValue: (_team, rewards) => (rewards.get('A') ?? 0) + (rewards.get('B') ?? 0),
-    explorationBias: 0,
+    explorationConstant: 0,
     finalActionStrategy: 'maxChild',
     random: createSeededRandom(29),
   });
