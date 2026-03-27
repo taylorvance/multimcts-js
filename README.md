@@ -210,6 +210,8 @@ Run head-to-head matches between two built engines:
 npm run arena -- --scenario connect-four-opening --games 20 --iterations-a 2000 --iterations-b 2000
 ```
 
+The arena keeps a persistent tree per agent and advances both trees across played moves when possible, so match runs exercise tree reuse instead of rebuilding from scratch every ply.
+
 Compare two local checkouts or branches by pointing each side at a different built repo:
 
 ```bash
@@ -225,15 +227,11 @@ npm run arena -- --scenario connect-four-opening --team-value-strategy-a margin 
 Compare a new game against an older engine commit without backporting the game code:
 
 ```bash
-git worktree add /tmp/multimcts-old 7075f29
-ln -s "$PWD/node_modules" /tmp/multimcts-old/node_modules
-(cd /tmp/multimcts-old && npm run build)
 npm run profile:search -- --scenario hex-opening --iterations 1200
-(cd /tmp/multimcts-old && npm run profile:search -- --module "$PWD/scripts/scenarios/hex-opening.mjs" --iterations 1200)
-npm run arena -- --engine-a . --engine-b /tmp/multimcts-old --scenario hex-opening --games 6 --iterations-a 800 --iterations-b 800
+npm run compare:arena -- 7075f29 WORKTREE --scenario hex-opening --games 6 --iterations-a 800 --iterations-b 800
 ```
 
-This works because the current scenario module can supply the current game implementation while each engine build stays pinned to its own commit.
+The compare wrapper creates temporary worktrees, reuses the current checkout's `node_modules`, builds each ref, and then runs the shared arena core against those built engines. This works because the current scenario module can supply the current game implementation while each engine build stays pinned to its own commit.
 
 Future design notes for deferred ideas live in [docs/future-design-notes.md](docs/future-design-notes.md).
 

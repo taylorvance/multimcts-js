@@ -45,6 +45,7 @@
 	],
 	"scripts": {
 		"arena": "npm run build && node --experimental-strip-types scripts/arena.mjs",
+		"compare:arena": "node scripts/compare-arena.mjs",
 		"build": "rm -rf dist && tsc -p tsconfig.json",
 		"changeset": "changeset",
 		"clean": "rm -rf dist node_modules coverage .eslintcache *.tsbuildinfo",

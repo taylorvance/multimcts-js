@@ -41,6 +41,24 @@ The recommended path is:
 2. use explicit team-value strategies for adversarial-team behavior
 3. revisit player-vs-team identity only when a concrete game requires it
 
+## Arena Follow-Up
+
+The current arena tooling is intentionally a two-agent harness even though the engine itself supports more than two teams.
+
+That was a deliberate scoping choice rather than a claim that future arena work should stay 2-player only.
+
+Why this is deferred:
+
+- the repo does not yet have a canonical `>=3` player or team benchmark game that is important enough to drive arena design
+- seat assignment, fairness, and reporting semantics for `>=3` participants are easier to get wrong than the current two-agent case
+- the recent arena refactor already isolates match execution from worktree and build plumbing, so later generalization can focus on the match layer
+
+Recommended path:
+
+1. keep the current two-agent arena for engine-vs-engine regression testing and optimization work
+2. revisit generalized multiplayer arena support only after the repo has a canonical `>=3` player or team benchmark scenario
+3. design `N`-agent seat mapping and reporting around that real game rather than around hypothetical generic cases
+
 ## Historical MCTS Optimization Reference
 
 The original Hexachromix-specific optimization work is not in this repo.

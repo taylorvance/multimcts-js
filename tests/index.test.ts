@@ -4,6 +4,8 @@ import { GameState, MCTS, teamValueStrategies } from '../src/index.ts';
 import { BreakthroughState, type BreakthroughCell } from '../src/games/breakthrough.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 import { HexState, playHexMoves } from '../src/games/hex.ts';
+// @ts-expect-error arena helper is a runtime JS module without a declaration file.
+import { playArenaGame } from '../scripts/lib/arena-core.mjs';
 
 const createSeededRandom = (seed: number) => {
   let state = seed >>> 0;
@@ -158,6 +160,72 @@ class RolloutSamplingState extends GameState<string, 'R', RolloutSamplingState> 
   override sampleLegalMove() {
     this.rolloutSelectionCalls[0] += 1;
     return 'finish';
+  }
+}
+
+class ArenaTwoPlyState extends GameState<string, 'red' | 'blue', ArenaTwoPlyState> {
+  readonly ply: number;
+
+  constructor(ply = 0) {
+    super();
+    this.ply = ply;
+  }
+
+  getCurrentTeam() {
+    return this.ply === 0 ? 'red' : 'blue';
+  }
+
+  getLegalMoves() {
+    return this.ply < 2 ? [`move-${this.ply}`] : [];
+  }
+
+  makeMove(_move: string) {
+    return new ArenaTwoPlyState(this.ply + 1);
+  }
+
+  isTerminal() {
+    return this.ply >= 2;
+  }
+
+  getReward() {
+    return { blue: 0, red: 1 };
+  }
+}
+
+class ArenaThreeTeamState extends GameState<string, 'red' | 'blue' | 'green', ArenaThreeTeamState> {
+  readonly ply: number;
+
+  constructor(ply = 0) {
+    super();
+    this.ply = ply;
+  }
+
+  getCurrentTeam() {
+    if(this.ply === 0) {
+      return 'red';
+    }
+
+    if(this.ply === 1) {
+      return 'blue';
+    }
+
+    return 'green';
+  }
+
+  getLegalMoves() {
+    return this.ply < 3 ? [`move-${this.ply}`] : [];
+  }
+
+  makeMove(_move: string) {
+    return new ArenaThreeTeamState(this.ply + 1);
+  }
+
+  isTerminal() {
+    return this.ply >= 3;
+  }
+
+  getReward() {
+    return { blue: 0, green: -1, red: 1 };
   }
 }
 
@@ -481,4 +549,89 @@ test('BreakthroughState detects a home-rank win for W', () => {
 
   assert.equal(terminalState.isTerminal(), true);
   assert.deepEqual(terminalState.getReward(), { W: 1, B: 0 });
+});
+
+test('playArenaGame advances both agents after every played move', () => {
+  const advanceCalls: Array<[string, string]> = [];
+  const chooseCalls: string[] = [];
+
+  const createAgent = (agentKey: 'A' | 'B') => ({
+    advance: (move: string, nextState: ArenaTwoPlyState) => {
+      advanceCalls.push([agentKey, `${move}:${nextState.ply}`]);
+      return true;
+    },
+    chooseMove: (state: ArenaTwoPlyState) => {
+      chooseCalls.push(`${agentKey}:${state.ply}`);
+      return {
+        elapsedMs: 0,
+        iterations: 5,
+        move: `move-${state.ply}`,
+      };
+    },
+    getSummary: () => ({
+      avgIterationsPerMove: 5,
+      avgMoveMs: 0,
+      iterations: 5,
+      moveMs: 0,
+      moves: 1,
+    }),
+  });
+
+  const result = playArenaGame({
+    alternateSeats: true,
+    createAgents: () => ({
+      A: createAgent('A'),
+      B: createAgent('B'),
+    }),
+    createInitialState: () => new ArenaTwoPlyState(),
+    gameIndex: 0,
+    iterations: {
+      A: 10,
+      B: 10,
+    },
+  });
+
+  assert.equal(result.winner, 'A');
+  assert.deepEqual(chooseCalls, ['A:0', 'B:1']);
+  assert.deepEqual(advanceCalls, [
+    ['A', 'move-0:1'],
+    ['B', 'move-0:1'],
+    ['A', 'move-1:2'],
+    ['B', 'move-1:2'],
+  ]);
+});
+
+test('playArenaGame rejects games that reveal more than two teams', () => {
+  const createAgent = () => ({
+    advance: () => true,
+    chooseMove: (state: ArenaThreeTeamState) => ({
+      elapsedMs: 0,
+      iterations: 1,
+      move: `move-${state.ply}`,
+    }),
+    getSummary: () => ({
+      avgIterationsPerMove: 1,
+      avgMoveMs: 0,
+      iterations: 1,
+      moveMs: 0,
+      moves: 1,
+    }),
+  });
+
+  assert.throws(
+    () => playArenaGame({
+      alternateSeats: false,
+      createAgents: () => ({
+        A: createAgent(),
+        B: createAgent(),
+      }),
+      createInitialState: () => new ArenaThreeTeamState(),
+      gameIndex: 0,
+      iterations: {
+        A: 10,
+        B: 10,
+      },
+    }),
+    /supports exactly 2 distinct teams/,
+  );
 });
