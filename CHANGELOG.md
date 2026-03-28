@@ -1,5 +1,13 @@
 # multimcts
 
+## 2.1.1
+
+### Patch Changes
+
+- 92283f7: Add `npm run benchmark:compare` for running the current canonical profile and arena matrix against a baseline ref.
+
+  Allow `scripts/profile-search.mjs` to target an arbitrary built engine via `--engine`, and refactor the compare scripts onto shared worktree/build helpers.
+
 ## 2.1.0
 
 ### Minor Changes
