@@ -7,6 +7,8 @@ import { TicTacToeState } from '../src/examples/tictactoe.ts';
 import { HexState, playHexMoves } from '../src/games/hex.ts';
 // @ts-expect-error arena helper is a runtime JS module without a declaration file.
 import { parseArenaOptions, playArenaGame } from '../scripts/lib/arena-core.mjs';
+// @ts-expect-error benchmark helper is a runtime JS module without a declaration file.
+import { parseCompareBenchmarkOptions } from '../scripts/compare-benchmark-suite.mjs';
 // @ts-expect-error profile helper is a runtime JS module without a declaration file.
 import { parseOptions as parseProfileOptions } from '../scripts/profile-search.mjs';
 
@@ -363,6 +365,22 @@ test('CLI parsers accept explicit zero for constant flags', () => {
   assert.equal(arenaOptions.explorationConstantA, 0);
   assert.equal(arenaOptions.explorationConstantB, 0);
   assert.equal(profileOptions.explorationConstant, 0);
+});
+
+test('profile parser accepts an explicit engine path', () => {
+  const profileOptions = parseProfileOptions([
+    '--engine', '../multimcts-js-other-checkout',
+  ]);
+
+  assert.equal(profileOptions.engine, '../multimcts-js-other-checkout');
+});
+
+test('benchmark compare parser uses the post-2.0.0 default baseline', () => {
+  const parsed = parseCompareBenchmarkOptions([]);
+
+  assert.equal(parsed.baselineRef, '55e09df');
+  assert.equal(parsed.candidateRef, 'WORKTREE');
+  assert.equal(parsed.options.quick, false);
 });
 
 test('constructor rejects conflicting constant and bias aliases', () => {

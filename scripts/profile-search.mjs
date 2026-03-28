@@ -1,11 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
+import { loadEngine } from './lib/arena-core.mjs';
 
 let MCTS;
 
 const DEFAULT_OPTIONS = {
   diagnostics: false,
+  engine: '.',
   explorationConstant: Math.SQRT2,
   finalActionStrategy: 'robustChild',
   instrumentEngine: false,
@@ -93,6 +95,10 @@ export const parseOptions = (rawArgs) => {
     }
 
     switch(arg) {
+      case '--engine':
+        options.engine = nextValue;
+        index += 1;
+        break;
       case '--exploration-constant':
       case '--exploration-bias':
         options.explorationConstant = parseNonNegativeNumber(nextValue, arg);
@@ -363,6 +369,7 @@ const formatResult = (summary) => {
   const lines = [
     `Scenario: ${summary.scenario.label}`,
     `Module: ${summary.scenario.modulePath}`,
+    `Engine module: ${summary.engine.modulePath}`,
     `Iterations/sample: ${summary.config.iterations}`,
     `Samples: ${summary.config.samples}`,
     `Warmup: ${summary.config.warmup}`,
@@ -406,8 +413,9 @@ const formatProfileRerunTarget = (options) => (
 );
 
 const main = async () => {
-  ({ MCTS } = await import('../dist/index.js'));
   const rawOptions = parseOptions(process.argv.slice(2));
+  const engine = await loadEngine(rawOptions.engine);
+  ({ MCTS } = engine);
   const scenario = await loadScenario(rawOptions);
   const options = {
     ...rawOptions,
@@ -469,6 +477,7 @@ const main = async () => {
   const summary = {
     config: {
       diagnostics: options.diagnostics,
+      engine: rawOptions.engine,
       explorationConstant: options.explorationConstant,
       finalActionStrategy: options.finalActionStrategy,
       instrumentEngine: options.instrumentEngine,
@@ -484,6 +493,9 @@ const main = async () => {
     },
     finalActionStrategy: options.finalActionStrategy,
     diagnostics,
+    engine: {
+      modulePath: engine.modulePath,
+    },
     lastSample: {
       bestMove: lastSample?.result.bestMove ?? null,
       iterations: lastSample?.result.iterations ?? 0,

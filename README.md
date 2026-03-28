@@ -253,6 +253,14 @@ npm run compare:arena -- 7075f29 WORKTREE --scenario hex-opening --games 6 --ite
 
 The compare wrapper creates temporary worktrees, reuses the current checkout's `node_modules`, builds each ref, and then runs the shared arena core against those built engines. This works because the current scenario module can supply the current game implementation while each engine build stays pinned to its own commit.
 
+Run the current benchmark suite against the post-`2.0.0` baseline:
+
+```bash
+npm run benchmark:compare -- --quick
+```
+
+That wrapper builds each ref once, then runs profile and arena comparisons across the canonical scenario set, including `Isolation`. It defaults to comparing `WORKTREE` against commit `55e09df`, and `--quick` keeps the matrix small enough for routine spot checks.
+
 Future design notes for deferred ideas live in [docs/future-design-notes.md](docs/future-design-notes.md).
 
 Terminology and naming policy live in [docs/terminology.md](docs/terminology.md).
