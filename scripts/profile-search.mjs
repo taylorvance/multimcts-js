@@ -27,6 +27,8 @@ const BUILTIN_SCENARIOS = {
   'connect-four-opening': './scenarios/connect-four-opening.mjs',
   'hex-midgame': './scenarios/hex-midgame.mjs',
   'hex-opening': './scenarios/hex-opening.mjs',
+  'isolation-midgame': './scenarios/isolation-midgame.mjs',
+  'isolation-opening': './scenarios/isolation-opening.mjs',
   'othello-opening': './scenarios/othello-opening.mjs',
   'tictactoe-midgame': './scenarios/tictactoe-midgame.mjs',
 };

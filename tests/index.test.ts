@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { GameState, MCTS, teamValueStrategies } from '../src/index.ts';
 import { BreakthroughState, type BreakthroughCell } from '../src/games/breakthrough.ts';
+import { IsolationState, playIsolationMoves } from '../src/games/isolation.ts';
 import { TicTacToeState } from '../src/examples/tictactoe.ts';
 import { HexState, playHexMoves } from '../src/games/hex.ts';
 // @ts-expect-error arena helper is a runtime JS module without a declaration file.
@@ -584,6 +585,62 @@ test('BreakthroughState detects a home-rank win for W', () => {
 
   assert.equal(terminalState.isTerminal(), true);
   assert.deepEqual(terminalState.getReward(), { W: 1, B: 0 });
+});
+
+test('IsolationState opening exposes the expected number of legal moves', () => {
+  const state = new IsolationState();
+
+  assert.equal(state.getCurrentTeam(), 'A');
+  assert.equal(state.getLegalMoves().length, 8);
+  assert.equal(state.getLegalMoves().includes(state.sampleLegalMove(createSeededRandom(43))), true);
+});
+
+test('IsolationState skips and eliminates trapped players when advancing the turn', () => {
+  const board = [
+    '#', 'B', '#', '#', '#',
+    '#', '#', '#', '#', '#',
+    '#', null, 'A', null, '#',
+    '#', '#', '#', null, '#',
+    '#', '#', 'C', null, '#',
+  ] as const;
+  const state = new IsolationState(board, 'A', 5);
+  const nextState = state.makeMove(11);
+
+  assert.equal(nextState.isTerminal(), false);
+  assert.equal(nextState.getCurrentTeam(), 'C');
+  assert.equal(nextState.board[1], '#');
+});
+
+test('IsolationState detects the lone survivor as the winner', () => {
+  const board = [
+    '#', '#', '#', '#', '#',
+    '#', '#', 'A', '#', '#',
+    '#', '#', '#', '#', '#',
+    '#', '#', '#', '#', '#',
+    '#', '#', '#', '#', '#',
+  ] as const;
+  const state = new IsolationState(board, 'A', 5);
+
+  assert.equal(state.isTerminal(), true);
+  assert.deepEqual(state.getReward(), { A: 1, B: 0, C: 0 });
+});
+
+test('playIsolationMoves produces a non-terminal multiplayer midgame', () => {
+  const state = playIsolationMoves([
+    17,
+    29,
+    33,
+    25,
+    22,
+    26,
+    32,
+    16,
+    18,
+  ], 7);
+
+  assert.equal(state.isTerminal(), false);
+  assert.equal(state.getCurrentTeam(), 'A');
+  assert.equal(state.getLegalMoves().length > 0, true);
 });
 
 test('playArenaGame advances both agents after every played move', () => {

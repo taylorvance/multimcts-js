@@ -27,6 +27,7 @@ Explicit subpaths:
 - `multimcts/connect-four`
 - `multimcts/othello`
 - `multimcts/hex`
+- `multimcts/isolation`
 
 ## Design Goals
 
@@ -73,6 +74,7 @@ Additional reusable game modules are available via:
 - `multimcts/connect-four`
 - `multimcts/othello`
 - `multimcts/hex`
+- `multimcts/isolation`
 
 Choosing a different final-action policy:
 
@@ -163,6 +165,8 @@ Built-in scenarios currently include:
 - `connect-four-midgame`
 - `hex-opening`
 - `hex-midgame`
+- `isolation-opening`
+- `isolation-midgame`
 - `othello-opening`
 
 ## Benchmark Suite
@@ -174,6 +178,7 @@ The benchmark pool is intentionally diverse rather than stacked with slight vari
 - `Breakthrough` is the race-and-capture benchmark. It represents forward-only tactical games where mobility, tempo, and capture pressure matter more than heavy rules logic.
 - `Othello` is the medium-complexity legality benchmark. It represents games where move generation and terminal checks are materially more expensive than the engine itself.
 - `Hex` is the connection-game benchmark. It represents path-connectivity win conditions and connection-focused search rather than capture-heavy or score-heavy play.
+- `Isolation (3-player)` is the current multiplayer benchmark. It represents deterministic elimination play, multi-team turn order, and `>=3` player search semantics without heavy rules complexity.
 
 For each benchmark game, prefer a small position set rather than only the initial state:
 
@@ -205,6 +210,12 @@ Override the team-value strategy during a profile run:
 npm run profile:search -- --scenario connect-four-midgame --team-value-strategy self
 ```
 
+Profile the multiplayer Isolation benchmark:
+
+```bash
+npm run profile:search -- --scenario isolation-opening --iterations 2000
+```
+
 Run head-to-head matches between two built engines:
 
 ```bash
@@ -212,6 +223,8 @@ npm run arena -- --scenario connect-four-opening --games 20 --iterations-a 2000 
 ```
 
 The arena keeps a persistent tree per agent and advances both trees across played moves when possible, so match runs exercise tree reuse instead of rebuilding from scratch every ply.
+
+The current arena remains intentionally 2-agent only. `Isolation` is available as a profiling benchmark now and is intended to drive the next `N`-agent arena generalization.
 
 Compare two local checkouts or branches by pointing each side at a different built repo:
 

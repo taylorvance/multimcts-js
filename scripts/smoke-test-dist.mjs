@@ -35,6 +35,8 @@ assert.ok(packedFiles.includes('dist/games/othello.js'));
 assert.ok(packedFiles.includes('dist/games/othello.d.ts'));
 assert.ok(packedFiles.includes('dist/games/hex.js'));
 assert.ok(packedFiles.includes('dist/games/hex.d.ts'));
+assert.ok(packedFiles.includes('dist/games/isolation.js'));
+assert.ok(packedFiles.includes('dist/games/isolation.d.ts'));
 assert.ok(packedFiles.includes('README.md'));
 assert.ok(!packedFiles.some((filePath) => filePath.startsWith('dist/tests/')));
 
@@ -44,6 +46,7 @@ const connectFourModule = await import(pathToFileURL(path.join(repoRoot, 'dist/g
 const breakthroughModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/breakthrough.js')).href);
 const othelloModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/othello.js')).href);
 const hexModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/hex.js')).href);
+const isolationModule = await import(pathToFileURL(path.join(repoRoot, 'dist/games/isolation.js')).href);
 
 assert.equal(typeof runtimeModule.GameState, 'function');
 assert.equal(typeof runtimeModule.MCTS, 'function');
@@ -53,6 +56,7 @@ assert.equal(typeof connectFourModule.ConnectFourState, 'function');
 assert.equal(typeof breakthroughModule.BreakthroughState, 'function');
 assert.equal(typeof othelloModule.OthelloState, 'function');
 assert.equal(typeof hexModule.HexState, 'function');
+assert.equal(typeof isolationModule.IsolationState, 'function');
 
 const searchState = new exampleModule.TicTacToeState();
 const mcts = new runtimeModule.MCTS({ random: () => 0.5 });

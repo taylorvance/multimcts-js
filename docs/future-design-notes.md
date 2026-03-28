@@ -49,14 +49,14 @@ That was a deliberate scoping choice rather than a claim that future arena work 
 
 Why this is deferred:
 
-- the repo does not yet have a canonical `>=3` player or team benchmark game that is important enough to drive arena design
 - seat assignment, fairness, and reporting semantics for `>=3` participants are easier to get wrong than the current two-agent case
 - the recent arena refactor already isolates match execution from worktree and build plumbing, so later generalization can focus on the match layer
+- the repo now has a concrete `>=3` benchmark target in `Isolation`, but the arena has not yet been generalized around it
 
 Recommended path:
 
 1. keep the current two-agent arena for engine-vs-engine regression testing and optimization work
-2. revisit generalized multiplayer arena support only after the repo has a canonical `>=3` player or team benchmark scenario
+2. use `Isolation` as the first concrete design target for generalized multiplayer arena support
 3. design `N`-agent seat mapping and reporting around that real game rather than around hypothetical generic cases
 
 ## Optimization Roadmap
