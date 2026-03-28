@@ -224,7 +224,13 @@ npm run arena -- --scenario connect-four-opening --games 20 --iterations-a 2000 
 
 The arena keeps a persistent tree per agent and advances both trees across played moves when possible, so match runs exercise tree reuse instead of rebuilding from scratch every ply.
 
-The current arena remains intentionally 2-agent only. `Isolation` is available as a profiling benchmark now and is intended to drive the next `N`-agent arena generalization.
+The arena remains a two-competitor harness, but it can now run scenarios with more than two in-game teams by distributing discovered teams across competitors and alternating that pattern between games.
+
+Run the current multiplayer benchmark in arena mode:
+
+```bash
+npm run arena -- --scenario isolation-opening --games 12 --iterations-a 1200 --iterations-b 1200
+```
 
 Compare two local checkouts or branches by pointing each side at a different built repo:
 

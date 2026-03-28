@@ -43,21 +43,21 @@ The recommended path is:
 
 ## Arena Follow-Up
 
-The current arena tooling is intentionally a two-agent harness even though the engine itself supports more than two teams.
+The arena is still intentionally a two-competitor harness, but it now supports scenarios with more than two in-game teams.
 
-That was a deliberate scoping choice rather than a claim that future arena work should stay 2-player only.
+Current behavior:
 
-Why this is deferred:
+- discovered teams are assigned across competitors in alternating order
+- seat order still alternates by game, so multiplayer scenarios like `Isolation` can be used immediately for A-vs-B engine comparisons
+- winner reporting is reduced back to the two competitors, even when the underlying game has more than two teams
 
-- seat assignment, fairness, and reporting semantics for `>=3` participants are easier to get wrong than the current two-agent case
-- the recent arena refactor already isolates match execution from worktree and build plumbing, so later generalization can focus on the match layer
-- the repo now has a concrete `>=3` benchmark target in `Isolation`, but the arena has not yet been generalized around it
+This is the right near-term compromise for regression testing, but it is not the same thing as a fully general `N`-competitor arena.
 
-Recommended path:
+Remaining follow-up:
 
-1. keep the current two-agent arena for engine-vs-engine regression testing and optimization work
-2. use `Isolation` as the first concrete design target for generalized multiplayer arena support
-3. design `N`-agent seat mapping and reporting around that real game rather than around hypothetical generic cases
+1. decide whether the repo actually needs more than two distinct engine competitors in one arena run
+2. if so, design explicit competitor lists, seat rotation, and summary reporting around real multiplayer scenarios rather than around hypothetical generic cases
+3. keep the current two-competitor path as the simple default for commit-vs-commit engine testing
 
 ## Optimization Roadmap
 

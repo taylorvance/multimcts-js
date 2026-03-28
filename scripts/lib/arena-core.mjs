@@ -9,6 +9,8 @@ export const BUILTIN_ARENA_SCENARIOS = {
   'connect-four-midgame': './scenarios/connect-four-midgame.mjs',
   'hex-opening': './scenarios/hex-opening.mjs',
   'hex-midgame': './scenarios/hex-midgame.mjs',
+  'isolation-opening': './scenarios/isolation-opening.mjs',
+  'isolation-midgame': './scenarios/isolation-midgame.mjs',
   'othello-opening': './scenarios/othello-opening.mjs',
   'tictactoe-opening': './scenarios/tictactoe-opening.mjs',
 };
@@ -329,6 +331,44 @@ const createTotals = () => ({
   moves: 0,
 });
 
+const getAgentOrder = (alternateSeats, gameIndex) => (
+  alternateSeats && (gameIndex % 2 === 1)
+    ? ['B', 'A']
+    : ['A', 'B']
+);
+
+const assignTeamToAgent = (teamToAgentKey, currentTeam, agentOrder) => {
+  if(teamToAgentKey.has(currentTeam)) {
+    return teamToAgentKey.get(currentTeam);
+  }
+
+  const agentKey = agentOrder[teamToAgentKey.size % agentOrder.length];
+  teamToAgentKey.set(currentTeam, agentKey);
+  return agentKey;
+};
+
+const getCompetitorWinner = (terminalOutcome, teamToAgentKey) => {
+  if(terminalOutcome.winners.length === 0) {
+    return 'draw';
+  }
+
+  const winningAgentKeys = new Set(
+    terminalOutcome.winners
+      .map((team) => teamToAgentKey.get(team))
+      .filter((agentKey) => agentKey !== undefined),
+  );
+
+  if(winningAgentKeys.size === 1) {
+    return [...winningAgentKeys][0];
+  }
+
+  if(winningAgentKeys.size === 0 && !terminalOutcome.draw) {
+    return 'unknown';
+  }
+
+  return 'draw';
+};
+
 export const playArenaGame = ({
   alternateSeats,
   createAgents,
@@ -337,9 +377,7 @@ export const playArenaGame = ({
   iterations,
 }) => {
   const agents = createAgents(gameIndex);
-  const agentOrder = alternateSeats && (gameIndex % 2 === 1)
-    ? ['B', 'A']
-    : ['A', 'B'];
+  const agentOrder = getAgentOrder(alternateSeats, gameIndex);
   const teamToAgentKey = new Map();
   let lastTeam = null;
   let moveCount = 0;
@@ -349,18 +387,7 @@ export const playArenaGame = ({
     const currentTeam = state.getCurrentTeam();
     lastTeam = currentTeam;
 
-    if(!teamToAgentKey.has(currentTeam)) {
-      if(teamToAgentKey.size >= agentOrder.length) {
-        throw new Error(
-          `Arena currently supports exactly ${agentOrder.length} distinct teams per game; `
-          + `encountered an unexpected additional team "${String(currentTeam)}".`,
-        );
-      }
-
-      teamToAgentKey.set(currentTeam, agentOrder[teamToAgentKey.size]);
-    }
-
-    const agentKey = teamToAgentKey.get(currentTeam);
+    const agentKey = assignTeamToAgent(teamToAgentKey, currentTeam, agentOrder);
     if(!agentKey) {
       throw new Error(`Failed to resolve an agent for team "${String(currentTeam)}".`);
     }
@@ -380,12 +407,7 @@ export const playArenaGame = ({
   }
 
   const terminalOutcome = getTerminalOutcome(state, lastTeam ?? state.getCurrentTeam());
-  let winner = 'draw';
-
-  if(!terminalOutcome.draw && terminalOutcome.winners.length === 1) {
-    const winnerKey = teamToAgentKey.get(terminalOutcome.winners[0]);
-    winner = winnerKey ?? 'unknown';
-  }
+  const winner = getCompetitorWinner(terminalOutcome, teamToAgentKey);
 
   return {
     agentSummaries: {
@@ -397,6 +419,9 @@ export const playArenaGame = ({
       A: agentOrder[0] === 'A' ? 'first' : 'second',
       B: agentOrder[0] === 'B' ? 'first' : 'second',
     },
+    teamAssignments: Object.fromEntries(
+      [...teamToAgentKey.entries()].map(([team, agentKey]) => [String(team), agentKey]),
+    ),
     terminalOutcome,
     winner,
   };

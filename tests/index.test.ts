@@ -232,6 +232,43 @@ class ArenaThreeTeamState extends GameState<string, 'red' | 'blue' | 'green', Ar
   }
 }
 
+class ArenaThreeTeamTieState extends GameState<string, 'red' | 'blue' | 'green', ArenaThreeTeamTieState> {
+  readonly ply: number;
+
+  constructor(ply = 0) {
+    super();
+    this.ply = ply;
+  }
+
+  getCurrentTeam() {
+    if(this.ply === 0) {
+      return 'red';
+    }
+
+    if(this.ply === 1) {
+      return 'blue';
+    }
+
+    return 'green';
+  }
+
+  getLegalMoves() {
+    return this.ply < 3 ? [`move-${this.ply}`] : [];
+  }
+
+  makeMove(_move: string) {
+    return new ArenaThreeTeamTieState(this.ply + 1);
+  }
+
+  isTerminal() {
+    return this.ply >= 3;
+  }
+
+  getReward() {
+    return { blue: 0, green: 1, red: 1 };
+  }
+}
+
 class SuggestionRolloutState extends GameState<string, 'S', SuggestionRolloutState> {
   readonly step: number;
   readonly suggestionCalls: [number];
@@ -693,7 +730,8 @@ test('playArenaGame advances both agents after every played move', () => {
   ]);
 });
 
-test('playArenaGame rejects games that reveal more than two teams', () => {
+test('playArenaGame assigns three-team games across the two competitors', () => {
+  const chooseCalls: string[] = [];
   const createAgent = () => ({
     advance: () => true,
     chooseMove: (state: ArenaThreeTeamState) => ({
@@ -709,21 +747,93 @@ test('playArenaGame rejects games that reveal more than two teams', () => {
       moves: 1,
     }),
   });
-
-  assert.throws(
-    () => playArenaGame({
-      alternateSeats: false,
-      createAgents: () => ({
-        A: createAgent(),
-        B: createAgent(),
-      }),
-      createInitialState: () => new ArenaThreeTeamState(),
-      gameIndex: 0,
-      iterations: {
-        A: 10,
-        B: 10,
-      },
+  const createLoggingAgent = (agentKey: 'A' | 'B') => ({
+    advance: () => true,
+    chooseMove: (state: ArenaThreeTeamState) => {
+      chooseCalls.push(`${agentKey}:${state.ply}`);
+      return {
+        elapsedMs: 0,
+        iterations: 1,
+        move: `move-${state.ply}`,
+      };
+    },
+    getSummary: () => ({
+      avgIterationsPerMove: 1,
+      avgMoveMs: 0,
+      iterations: 1,
+      moveMs: 0,
+      moves: 1,
     }),
-    /supports exactly 2 distinct teams/,
-  );
+  });
+
+  const firstGame = playArenaGame({
+    alternateSeats: true,
+    createAgents: () => ({
+      A: createLoggingAgent('A'),
+      B: createLoggingAgent('B'),
+    }),
+    createInitialState: () => new ArenaThreeTeamState(),
+    gameIndex: 0,
+    iterations: {
+      A: 10,
+      B: 10,
+    },
+  });
+
+  const secondGame = playArenaGame({
+    alternateSeats: true,
+    createAgents: () => ({
+      A: createAgent(),
+      B: createAgent(),
+    }),
+    createInitialState: () => new ArenaThreeTeamState(),
+    gameIndex: 1,
+    iterations: {
+      A: 10,
+      B: 10,
+    },
+  });
+
+  assert.deepEqual(chooseCalls, ['A:0', 'B:1', 'A:2']);
+  assert.deepEqual(firstGame.teamAssignments, { blue: 'B', green: 'A', red: 'A' });
+  assert.equal(firstGame.winner, 'A');
+  assert.deepEqual(secondGame.teamAssignments, { blue: 'A', green: 'B', red: 'B' });
+  assert.equal(secondGame.winner, 'B');
+});
+
+test('playArenaGame treats tied top teams controlled by one competitor as a win', () => {
+  const createAgent = () => ({
+    advance: () => true,
+    chooseMove: (state: ArenaThreeTeamTieState) => ({
+      elapsedMs: 0,
+      iterations: 1,
+      move: `move-${state.ply}`,
+    }),
+    getSummary: () => ({
+      avgIterationsPerMove: 1,
+      avgMoveMs: 0,
+      iterations: 1,
+      moveMs: 0,
+      moves: 1,
+    }),
+  });
+
+  const result = playArenaGame({
+    alternateSeats: false,
+    createAgents: () => ({
+      A: createAgent(),
+      B: createAgent(),
+    }),
+    createInitialState: () => new ArenaThreeTeamTieState(),
+    gameIndex: 0,
+    iterations: {
+      A: 10,
+      B: 10,
+    },
+  });
+
+  assert.equal(result.terminalOutcome.draw, true);
+  assert.deepEqual(result.terminalOutcome.winners.sort(), ['green', 'red']);
+  assert.deepEqual(result.teamAssignments, { blue: 'B', green: 'A', red: 'A' });
+  assert.equal(result.winner, 'A');
 });
