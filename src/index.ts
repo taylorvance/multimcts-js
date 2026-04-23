@@ -153,10 +153,6 @@ const assertPositiveNumber = (value: number, label: string) => {
 const validateLimits = (limits: SearchLimits): Required<SearchLimits> => {
   const { maxIterations, maxRetainedNodes, maxTimeMs } = limits;
 
-  if(maxIterations === undefined && maxRetainedNodes === undefined && maxTimeMs === undefined) {
-    throw new Error('At least one of maxIterations, maxRetainedNodes, or maxTimeMs is required.');
-  }
-
   if(maxIterations !== undefined) {
     assertPositiveInteger(maxIterations, 'maxIterations');
   }
@@ -167,6 +163,10 @@ const validateLimits = (limits: SearchLimits): Required<SearchLimits> => {
 
   if(maxTimeMs !== undefined) {
     assertPositiveNumber(maxTimeMs, 'maxTimeMs');
+  }
+
+  if(maxIterations === undefined && maxTimeMs === undefined) {
+    throw new Error('At least one of maxIterations or maxTimeMs is required.');
   }
 
   return {

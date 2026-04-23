@@ -333,7 +333,11 @@ class SuggestionRolloutState extends GameState<string, 'S', SuggestionRolloutSta
 test('search validates limits', () => {
   const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>();
 
-  assert.throws(() => mcts.search(new TicTacToeState(), {}), /At least one/);
+  assert.throws(() => mcts.search(new TicTacToeState(), {}), /maxIterations or maxTimeMs/);
+  assert.throws(
+    () => mcts.search(new TicTacToeState(), { maxRetainedNodes: 2 }),
+    /maxIterations or maxTimeMs/,
+  );
   assert.throws(
     () => mcts.search(new TicTacToeState(), { maxIterations: 0 }),
     /maxIterations must be a positive integer/,
@@ -460,18 +464,6 @@ test('advanceToChild promotes an explored child to the root', () => {
   assert.equal(child.parent, null);
 });
 
-test('search can use maxRetainedNodes as the only search limit', () => {
-  const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
-    random: createSeededRandom(29),
-  });
-
-  const result = mcts.searchWithDiagnostics(new TicTacToeState(), { maxRetainedNodes: 2 });
-
-  assert.equal(result.iterations, 1);
-  assert.equal(result.bestMove !== null, true);
-  assert.equal(result.diagnostics?.retainedNodeCount, 2);
-});
-
 test('search stops once the retained-node cap is reached', () => {
   const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
     random: createSeededRandom(31),
@@ -491,8 +483,9 @@ test('search reuses a capped root without forcing extra rounds', () => {
     random: createSeededRandom(37),
   });
   const state = new TicTacToeState();
-  const firstResult = mcts.searchWithDiagnostics(state, { maxRetainedNodes: 2 });
-  const secondResult = mcts.searchWithDiagnostics(state, { maxRetainedNodes: 2 });
+  const limits = { maxIterations: 10, maxRetainedNodes: 2 };
+  const firstResult = mcts.searchWithDiagnostics(state, limits);
+  const secondResult = mcts.searchWithDiagnostics(state, limits);
 
   assert.equal(firstResult.iterations, 1);
   assert.equal(firstResult.diagnostics?.retainedNodeCount, 2);
