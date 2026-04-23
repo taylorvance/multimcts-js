@@ -10,6 +10,7 @@ export interface RolloutSuggestion<TMove, TState> {
 
 export interface SearchLimits {
   maxIterations?: number;
+  maxRetainedNodes?: number;
   maxTimeMs?: number;
 }
 
@@ -150,14 +151,18 @@ const assertPositiveNumber = (value: number, label: string) => {
 };
 
 const validateLimits = (limits: SearchLimits): Required<SearchLimits> => {
-  const { maxIterations, maxTimeMs } = limits;
+  const { maxIterations, maxRetainedNodes, maxTimeMs } = limits;
 
-  if(maxIterations === undefined && maxTimeMs === undefined) {
-    throw new Error('At least one of maxIterations or maxTimeMs is required.');
+  if(maxIterations === undefined && maxRetainedNodes === undefined && maxTimeMs === undefined) {
+    throw new Error('At least one of maxIterations, maxRetainedNodes, or maxTimeMs is required.');
   }
 
   if(maxIterations !== undefined) {
     assertPositiveInteger(maxIterations, 'maxIterations');
+  }
+
+  if(maxRetainedNodes !== undefined) {
+    assertPositiveInteger(maxRetainedNodes, 'maxRetainedNodes');
   }
 
   if(maxTimeMs !== undefined) {
@@ -166,6 +171,7 @@ const validateLimits = (limits: SearchLimits): Required<SearchLimits> => {
 
   return {
     maxIterations: maxIterations ?? 0,
+    maxRetainedNodes: maxRetainedNodes ?? 0,
     maxTimeMs: maxTimeMs ?? 0,
   };
 };
@@ -278,6 +284,7 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
   readonly move: TMove | null;
   private parentNode: TreeNode<TState, TMove, TTeam> | null;
   private readonly remainingMoves: TMove[];
+  private subtreeNodeCount: number;
   private readonly utilitySumsMap: Map<TTeam, number>;
   readonly state: TState;
   readonly team: TTeam;
@@ -306,6 +313,7 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
     this.meanValue = 0;
     this.sqrtLogVisits = 0;
     this.inverseSqrtVisits = 0;
+    this.subtreeNodeCount = 1;
     this.isTerminal = state.isTerminal();
     this.fullyExpanded = this.isTerminal;
 
@@ -374,6 +382,7 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
 
   attachChild(move: TMove, child: TreeNode<TState, TMove, TTeam>) {
     this.childNodes.set(move, child);
+    this.adjustSubtreeNodeCount(child.subtreeNodeCount);
   }
 
   takeUnexpandedMove() {
@@ -476,13 +485,25 @@ class TreeNode<TState, TMove, TTeam> implements SearchNodeView<TState, TMove, TT
       visits: this.visitCount,
     };
   }
+
+  getSubtreeNodeCount() {
+    return this.subtreeNodeCount;
+  }
+
+  private adjustSubtreeNodeCount(delta: number) {
+    let currentNode: TreeNode<TState, TMove, TTeam> | null = this;
+
+    while(currentNode) {
+      currentNode.subtreeNodeCount += delta;
+      currentNode = currentNode.parentNode;
+    }
+  }
 }
 
 const finalizeSearchDiagnostics = <TState, TMove, TTeam>(
   root: TreeNode<TState, TMove, TTeam>,
   diagnostics: SearchDiagnostics,
 ) => {
-  let retainedNodeCount = 0;
   let treeMaxDepth = 0;
   const stack: Array<{ depth: number; node: TreeNode<TState, TMove, TTeam> }> = [
     { depth: 0, node: root },
@@ -494,7 +515,6 @@ const finalizeSearchDiagnostics = <TState, TMove, TTeam>(
       continue;
     }
 
-    retainedNodeCount += 1;
     if(current.depth > treeMaxDepth) {
       treeMaxDepth = current.depth;
     }
@@ -504,7 +524,7 @@ const finalizeSearchDiagnostics = <TState, TMove, TTeam>(
     }
   }
 
-  diagnostics.retainedNodeCount = retainedNodeCount;
+  diagnostics.retainedNodeCount = root.getSubtreeNodeCount();
   diagnostics.treeMaxDepth = treeMaxDepth;
 };
 
@@ -516,6 +536,7 @@ export class MCTS<
   readonly evaluateTeamValue: TeamValueEvaluator<TTeam>;
   readonly explorationConstant: number;
   readonly finalActionStrategy: FinalActionStrategy;
+  private currentRetainedNodeCount: number;
   private rootNode: TreeNode<TState, TMove, TTeam> | null;
   private readonly now: () => number;
   private readonly random: () => number;
@@ -543,6 +564,7 @@ export class MCTS<
     this.random = resolvedOptions.random ?? Math.random;
     this.now = resolvedOptions.now ?? (() => performance.now());
     this.stateKey = resolvedOptions.stateKey;
+    this.currentRetainedNodeCount = 0;
     this.rootNode = null;
   }
 
@@ -555,11 +577,13 @@ export class MCTS<
   }
 
   reset() {
+    this.currentRetainedNodeCount = 0;
     this.rootNode = null;
   }
 
   private initializeRoot(state: TState) {
     this.rootNode = new TreeNode(state, this.random);
+    this.currentRetainedNodeCount = this.rootNode.getSubtreeNodeCount();
     return this.rootNode;
   }
 
@@ -570,6 +594,8 @@ export class MCTS<
         root: this.initializeRoot(state),
       };
     }
+
+    this.currentRetainedNodeCount = this.rootNode.getSubtreeNodeCount();
 
     return {
       reused: true,
@@ -610,13 +636,19 @@ export class MCTS<
 
     let iterations = 0;
 
-    do {
-      this.executeRound(root, diagnostics);
-      iterations += 1;
-    } while(
+    while(
       (validatedLimits.maxIterations === 0 || iterations < validatedLimits.maxIterations)
       && this.now() < endTime
-    );
+      && (
+        validatedLimits.maxRetainedNodes === 0
+        || this.currentRetainedNodeCount < validatedLimits.maxRetainedNodes
+        || root.children.size === 0
+      )
+    ) {
+      this.executeRound(root, diagnostics);
+      this.currentRetainedNodeCount = root.getSubtreeNodeCount();
+      iterations += 1;
+    }
 
     if(diagnostics) {
       finalizeSearchDiagnostics(root, diagnostics);
@@ -750,6 +782,7 @@ export class MCTS<
 
     child.detachFromParent();
     this.rootNode = child;
+    this.currentRetainedNodeCount = child.getSubtreeNodeCount();
     return child;
   }
 

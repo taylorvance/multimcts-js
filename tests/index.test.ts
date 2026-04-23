@@ -339,6 +339,10 @@ test('search validates limits', () => {
     /maxIterations must be a positive integer/,
   );
   assert.throws(
+    () => mcts.search(new TicTacToeState(), { maxRetainedNodes: 0 }),
+    /maxRetainedNodes must be a positive integer/,
+  );
+  assert.throws(
     () => mcts.search(new TicTacToeState(), { maxTimeMs: 0 }),
     /maxTimeMs must be a positive number/,
   );
@@ -454,6 +458,48 @@ test('advanceToChild promotes an explored child to the root', () => {
   assert.equal(mcts.advanceToChild(resolvedMove, nextState), child);
   assert.equal(mcts.root, child);
   assert.equal(child.parent, null);
+});
+
+test('search can use maxRetainedNodes as the only search limit', () => {
+  const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+    random: createSeededRandom(29),
+  });
+
+  const result = mcts.searchWithDiagnostics(new TicTacToeState(), { maxRetainedNodes: 2 });
+
+  assert.equal(result.iterations, 1);
+  assert.equal(result.bestMove !== null, true);
+  assert.equal(result.diagnostics?.retainedNodeCount, 2);
+});
+
+test('search stops once the retained-node cap is reached', () => {
+  const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+    random: createSeededRandom(31),
+  });
+
+  const result = mcts.searchWithDiagnostics(new TicTacToeState(), {
+    maxIterations: 10,
+    maxRetainedNodes: 2,
+  });
+
+  assert.equal(result.iterations, 1);
+  assert.equal(result.diagnostics?.retainedNodeCount, 2);
+});
+
+test('search reuses a capped root without forcing extra rounds', () => {
+  const mcts = new MCTS<TicTacToeState, number, 'X' | 'O'>({
+    random: createSeededRandom(37),
+  });
+  const state = new TicTacToeState();
+  const firstResult = mcts.searchWithDiagnostics(state, { maxRetainedNodes: 2 });
+  const secondResult = mcts.searchWithDiagnostics(state, { maxRetainedNodes: 2 });
+
+  assert.equal(firstResult.iterations, 1);
+  assert.equal(firstResult.diagnostics?.retainedNodeCount, 2);
+  assert.equal(secondResult.iterations, 0);
+  assert.equal(secondResult.diagnostics?.rootReused, true);
+  assert.equal(secondResult.diagnostics?.retainedNodeCount, 2);
+  assert.equal(secondResult.bestMove !== null, true);
 });
 
 test('dict rewards propagate through multi-team searches', () => {
